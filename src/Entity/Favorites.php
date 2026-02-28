@@ -3,8 +3,6 @@
 namespace App\Entity;
 
 use App\Repository\FavoritesRepository;
-use Doctrine\Common\Collections\ArrayCollection;
-use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: FavoritesRepository::class)]
@@ -18,19 +16,11 @@ class Favorites
     #[ORM\ManyToOne(inversedBy: 'favorite_id')]
     private ?User $user_id = null;
 
-    /**
-     * @var Collection<int, Vehicles>
-     */
-    #[ORM\ManyToMany(targetEntity: Vehicles::class, inversedBy: 'favorite_id')]
-    private Collection $vehicle_id;
+    #[ORM\ManyToOne(inversedBy: 'favorite_id')]
+    private ?Vehicles $vehicle_id = null;
 
     #[ORM\Column(nullable: true)]
     private ?\DateTime $created_at = null;
-
-    public function __construct()
-    {
-        $this->vehicle_id = new ArrayCollection();
-    }
 
     public function getId(): ?int
     {
@@ -49,26 +39,14 @@ class Favorites
         return $this;
     }
 
-    /**
-     * @return Collection<int, Vehicles>
-     */
-    public function getVehicleId(): Collection
+    public function getVehicleId(): ?Vehicles
     {
         return $this->vehicle_id;
     }
 
-    public function addVehicleId(Vehicles $vehicleId): static
+    public function setVehicleId(?Vehicles $vehicleId): static
     {
-        if (!$this->vehicle_id->contains($vehicleId)) {
-            $this->vehicle_id->add($vehicleId);
-        }
-
-        return $this;
-    }
-
-    public function removeVehicleId(Vehicles $vehicleId): static
-    {
-        $this->vehicle_id->removeElement($vehicleId);
+        $this->vehicle_id = $vehicleId;
 
         return $this;
     }

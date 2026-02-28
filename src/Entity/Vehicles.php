@@ -41,7 +41,7 @@ class Vehicles
     /**
      * @var Collection<int, Favorites>
      */
-    #[ORM\ManyToMany(targetEntity: Favorites::class, mappedBy: 'vehicle_id')]
+    #[ORM\OneToMany(targetEntity: Favorites::class, mappedBy: 'vehicle_id')]
     private Collection $favorite_id;
 
     /**
@@ -147,7 +147,7 @@ class Vehicles
     {
         if (!$this->favorite_id->contains($favoriteId)) {
             $this->favorite_id->add($favoriteId);
-            $favoriteId->addVehicleId($this);
+            $favoriteId->setVehicleId($this);
         }
 
         return $this;
@@ -156,7 +156,10 @@ class Vehicles
     public function removeFavoriteId(Favorites $favoriteId): static
     {
         if ($this->favorite_id->removeElement($favoriteId)) {
-            $favoriteId->removeVehicleId($this);
+            // set the owning side to null (unless already changed)
+            if ($favoriteId->getVehicleId() === $this) {
+                $favoriteId->setVehicleId(null);
+            }
         }
 
         return $this;

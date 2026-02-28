@@ -22,6 +22,11 @@ class Favorites
     #[ORM\Column(nullable: true)]
     private ?\DateTime $created_at = null;
 
+    #[ORM\Column]
+    private ?bool $isFavorite = false;
+    
+     
+
     public function getId(): ?int
     {
         return $this->id;
@@ -38,7 +43,17 @@ class Favorites
 
         return $this;
     }
+    public function isFavorite(): ?bool
+    {
+        return $this->isFavorite;
+    }
 
+    public function setIsFavorite(bool $isFavorite): static
+    {
+        $this->isFavorite = $isFavorite;
+
+        return $this;
+    }
     public function getVehicleId(): ?Vehicles
     {
         return $this->vehicle_id;

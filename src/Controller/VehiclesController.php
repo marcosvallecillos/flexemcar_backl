@@ -39,7 +39,8 @@ final class VehiclesController extends AbstractController
             if ($reserva !== null) {
                 $reservasData[] = [
                     'id' => $reserva->getId(),
-                    'fecha' => $reserva->getDate(),
+                    'dia' => $reserva->getDia() ? $reserva->getDia()->format('Y-m-d') : null,
+                    'hora' => $reserva->getHora() ? $reserva->getHora()->format('H:i:s') : null,
                     'estado' => $reserva->getStatus(),
                 ];
             }
@@ -93,7 +94,8 @@ final class VehiclesController extends AbstractController
         if ($reserva !== null) {
             $reservasData[] = [
                 'id' => $reserva->getId(),
-                'fecha' => $reserva->getDate(),
+                'dia' => $reserva->getDia() ? $reserva->getDia()->format('Y-m-d') : null,
+                'hora' => $reserva->getHora() ? $reserva->getHora()->format('H:i:s') : null,
                 'estado' => $reserva->getStatus(),
             ];
         }
@@ -111,79 +113,87 @@ final class VehiclesController extends AbstractController
             'reservas' => $reservasData,
         ]);
     }
-    #[Route('/favoritos/{id}', name: 'agregar_a_favoritos', methods: ['GET', 'POST'])]
-public function agregarAFavoritos(int $id, Request $request, EntityManagerInterface $em): JsonResponse
-{
-    $vehicle = $em->getRepository(Vehicles::class)->find($id);
-    if (!$vehicle) {
-        return new JsonResponse(['error' => 'Vehículo no encontrado'], 404);
-    }
+#[Route('/favoritos/{id}', name: 'agregar_a_favoritos', methods: ['GET', 'POST'])]
+    public function agregarAFavoritos(int $id, Request $request, EntityManagerInterface $em): JsonResponse
+        {
+        $vehicle = $em->getRepository(Vehicles::class)->find($id);
+        if (!$vehicle) {
+            return new JsonResponse(['error' => 'Vehículo no encontrado'], 404);
+        }
 
-    if ($request->isMethod('GET')) {
-        return new JsonResponse([
-            'status' => 'success',
-            'vehicle' => [
-                'id' => $vehicle->getId(),
-                'modelo' => $vehicle->getModel(),
-                'marca' => $vehicle->getMarca(),
-                'precio' => $vehicle->getPrice(),
-                'motor' => $vehicle->getMotor(),
-                'km' => $vehicle->getKm(),
-                'year' => $vehicle->getYear(),
-                'image_url' => $vehicle->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,
-                
-                'favorite' => $vehicle->isFavorite(),
+        if ($request->isMethod('GET')) {
+            return new JsonResponse([
+                'status' => 'success',
+                'vehicle' => [
+                    'id' => $vehicle->getId(),
+                    'modelo' => $vehicle->getModel(),
+                    'marca' => $vehicle->getMarca(),
+                    'precio' => $vehicle->getPrice(),
+                    'motor' => $vehicle->getMotor(),
+                    'km' => $vehicle->getKm(),
+                    'year' => $vehicle->getYear(),
+                    'image_url' => $vehicle->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,
+                    
+                    'favorite' => $vehicle->isFavorite(),
 
-            ]
-        ]);
-    }
+                ]
+            ]);
+        }
 
-    $data = json_decode($request->getContent(), true);
-    $usuario = isset($data['usuario_id']) ? $em->getRepository(User::class)->find($data['usuario_id']) : null;
+        $data = json_decode($request->getContent(), true);
+        $usuario = isset($data['usuario_id']) ? $em->getRepository(User::class)->find($data['usuario_id']) : null;
 
-    if (!$usuario) {
-        return new JsonResponse(['error' => 'Usuario no encontrado o ID faltante'], 400);
-    }
+        if (!$usuario) {
+            return new JsonResponse(['error' => 'Usuario no encontrado o ID faltante'], 400);
+        }
 
-    $favoritoRepo = $em->getRepository(Favorites::class);
-    // En la entidad Favorites la propiedad es user_id, no usuario
-    $favorito = $favoritoRepo->findOneBy(['user_id' => $usuario, 'vehicle_id' => $vehicle]);
+        $favoritoRepo = $em->getRepository(Favorites::class);
+        // Buscar si ya existe un favorito para este usuario y vehículo usando QueryBuilder
+        $favorito = $favoritoRepo->createQueryBuilder('f')
+            ->where('f.user_id = :usuario')
+            ->andWhere('f.vehicle_id = :vehicle')
+            ->setParameter('usuario', $usuario)
+            ->setParameter('vehicle', $vehicle)
+            ->getQuery()
+            ->getOneOrNullResult();
 
-    if (!$favorito) {
-        $favorito = (new Favorites())
-            ->setUserId($usuario)
-            ->setVehicleId($vehicle)
-            ->setIsFavorite(true);
-    } else {
-        $favorito->setIsFavorite(!$favorito->isFavorite());
-    }
+        if (!$favorito) {
+            $favorito = new Favorites();
+            $favorito->setUserId($usuario);
+            $favorito->setVehicleId($vehicle);
+            $favorito->setIsFavorite(true);
+            $favorito->setCreatedAt(new \DateTime());
+        } else {
+            // Si existe, alternar el estado
+            $favorito->setIsFavorite(!$favorito->isFavorite());
+        }
 
-    try {
-        $em->persist($favorito);
-        $em->flush();
+        try {
+            $em->persist($favorito);
+            $em->flush();
 
-        return new JsonResponse([
-            'status' => 'success',
-            'message' => $favorito->isFavorite() ? 'vehicle agregado a favoritos' : 'vehicle removido de favoritos',
-            'vehicle' => [
-                'id' => $vehicle->getId(),
-                'marca' => $vehicle->getMarca(),
-                'modelo' => $vehicle->getModel(),
-                'precio' => $vehicle->getPrice(),
-                'motor' => $vehicle->getMotor(),
-                'km' => $vehicle->getKm(),
-                'year' => $vehicle->getYear(),
-                'image_url' => $vehicle->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,    
-                'favorite' => $favorito->isFavorite()
-            ]
-        ]);
-    } catch (\Exception $e) {
-        return new JsonResponse([
-            'status' => 'error',
-            'message' => 'Error al actualizar el estado de favorito',
-            'error' => $e->getMessage()
-        ], 500);
-    }
+            return new JsonResponse([
+                'status' => 'success',
+                'message' => $favorito->isFavorite() ? 'vehicle agregado a favoritos' : 'vehicle removido de favoritos',
+                'vehicle' => [
+                    'id' => $vehicle->getId(),
+                    'marca' => $vehicle->getMarca(),
+                    'modelo' => $vehicle->getModel(),
+                    'precio' => $vehicle->getPrice(),
+                    'motor' => $vehicle->getMotor(),
+                    'km' => $vehicle->getKm(),
+                    'year' => $vehicle->getYear(),
+                    'image_url' => $vehicle->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,    
+                    'favorite' => $favorito->isFavorite()
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Error al actualizar el estado de favorito',
+                'error' => $e->getMessage()
+            ], 500);
+        }
 }
     #[Route('/favoritos/usuario/{id}', name: 'get_favoritos_usuario', methods: ['GET'])]
     public function getFavoritosUsuario(int $id, EntityManagerInterface $em): JsonResponse
@@ -194,11 +204,14 @@ public function agregarAFavoritos(int $id, Request $request, EntityManagerInterf
             return new JsonResponse(['error' => 'Usuario no encontrado'], 404);
         }
 
-        // Buscar todos los favoritos del usuario (propiedad user_id en Favorites)
-        $favoritos = $em->getRepository(Favorites::class)->findBy([
-            'user_id' => $usuario,
-            'isFavorite' => true
-        ]);
+        // Buscar todos los favoritos del usuario
+        $favoritos = $em->getRepository(Favorites::class)->createQueryBuilder('f')
+            ->where('f.user_id = :usuario')
+            ->andWhere('f.isFavorite = :isFavorite')
+            ->setParameter('usuario', $usuario)
+            ->setParameter('isFavorite', true)
+            ->getQuery()
+            ->getResult();
 
         $data = [];
         foreach ($favoritos as $favorito) {

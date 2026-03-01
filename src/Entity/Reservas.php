@@ -6,6 +6,7 @@ use App\Repository\ReservasRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Doctrine\DBAL\Types\Types;
 
 #[ORM\Entity(repositoryClass: ReservasRepository::class)]
 class Reservas
@@ -15,8 +16,11 @@ class Reservas
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\Column(nullable: true)]
-    private ?\DateTime $date = null;
+    #[ORM\Column(type: Types::DATE_MUTABLE)]
+    private ?\DateTimeInterface $dia = null;
+
+    #[ORM\Column(type: Types::TIME_MUTABLE)]
+    private ?\DateTimeInterface $hora = null;
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $status = null;
@@ -24,14 +28,18 @@ class Reservas
     #[ORM\Column(nullable: true)]
     private ?\DateTime $created_at = null;
 
-    #[ORM\ManyToOne(inversedBy: 'reserva_id')]
-    private ?User $user_id = null;
+    #[ORM\ManyToOne(targetEntity: User::class, inversedBy: 'reservas')]
+    #[ORM\JoinColumn(name: "user_id", referencedColumnName: "id", nullable: false, onDelete: "CASCADE")]
+    private ?User $user = null;
 
     /**
      * @var Collection<int, Vehicles>
      */
     #[ORM\OneToMany(targetEntity: Vehicles::class, mappedBy: 'reserva_id')]
     private Collection $vehicles_id;
+
+    #[ORM\OneToOne(cascade: ['persist', 'remove'])]
+    private ?Reviews $review = null;
 
     public function __construct()
     {
@@ -43,14 +51,26 @@ class Reservas
         return $this->id;
     }
 
-    public function getDate(): ?\DateTime
+     public function getDia(): ?\DateTimeInterface
     {
-        return $this->date;
+        return $this->dia;
     }
 
-    public function setDate(?\DateTime $date): static
+    public function setDia(\DateTimeInterface $dia): static
     {
-        $this->date = $date;
+        $this->dia = $dia;
+
+        return $this;
+    }
+
+    public function getHora(): ?\DateTimeInterface
+    {
+        return $this->hora;
+    }
+
+    public function setHora(\DateTimeInterface $hora): static
+    {
+        $this->hora = $hora;
 
         return $this;
     }
@@ -79,14 +99,27 @@ class Reservas
         return $this;
     }
 
-    public function getUserId(): ?User
+    public function getUser(): ?User
     {
-        return $this->user_id;
+        return $this->user;
     }
 
-    public function setUserId(?User $user_id): static
+    public function setUser(?User $user): static
     {
-        $this->user_id = $user_id;
+        $this->user = $user;
+
+        return $this;
+    }
+
+    // Método de compatibilidad (deprecated, usar getUser/setUser)
+    public function getUserId(): ?User
+    {
+        return $this->user;
+    }
+
+    public function setUserId(?User $user): static
+    {
+        $this->user = $user;
 
         return $this;
     }
@@ -97,6 +130,12 @@ class Reservas
     public function getVehiclesId(): Collection
     {
         return $this->vehicles_id;
+    }
+    public function setVehiclesId(Vehicles $vehiclesId): static
+    {
+        $this->vehicles_id = new ArrayCollection();
+        $this->vehicles_id->add($vehiclesId);
+        return $this;
     }
 
     public function addVehiclesId(Vehicles $vehiclesId): static
@@ -117,6 +156,18 @@ class Reservas
                 $vehiclesId->setReservaId(null);
             }
         }
+
+        return $this;
+    }
+
+    public function getReview(): ?Reviews
+    {
+        return $this->review;
+    }
+
+    public function setReview(?Reviews $review): static
+    {
+        $this->review = $review;
 
         return $this;
     }

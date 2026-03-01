@@ -41,8 +41,34 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /**
      * @var Collection<int, Reservas>
      */
-    #[ORM\OneToMany(targetEntity: Reservas::class, mappedBy: 'user_id')]
-    private Collection $reserva_id;
+    #[ORM\OneToMany(targetEntity: Reservas::class, mappedBy: 'user', cascade: ['remove'], orphanRemoval: true)]
+private Collection $reservas;
+
+    
+
+    public function getReservas(): Collection
+    {
+        return $this->reservas;
+    }
+
+    public function addReserva(Reservas $reserva): static
+    {
+        if (!$this->reservas->contains($reserva)) {
+            $this->reservas->add($reserva);
+            $reserva->setUser($this);
+        }
+        return $this;
+    }
+
+    public function removeReserva(Reservas $reserva): static
+    {
+        if ($this->reservas->removeElement($reserva)) {
+            if ($reserva->getUser() === $this) {
+                $reserva->setUser(null);
+            }
+        }
+        return $this;
+    }
 
     /**
      * @var Collection<int, Favorites>
@@ -58,7 +84,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function __construct()
     {
-        $this->reserva_id = new ArrayCollection();
+        $this->reservas = new ArrayCollection();
         $this->favorite_id = new ArrayCollection();
         $this->review = new ArrayCollection();
     }
@@ -162,32 +188,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /**
      * @return Collection<int, Reservas>
      */
-    public function getReservas(): Collection
-    {
-        return $this->reserva_id;
-    }
-
-    public function addReservas(Reservas $reservaId): static
-    {
-        if (!$this->reserva_id->contains($reservaId)) {
-            $this->reserva_id->add($reservaId);
-            $reservaId->setUserId($this);
-        }
-
-        return $this;
-    }
-
-    public function removeReservaId(Reservas $reservaId): static
-    {
-        if ($this->reserva_id->removeElement($reservaId)) {
-            // set the owning side to null (unless already changed)
-            if ($reservaId->getUserId() === $this) {
-                $reservaId->setUserId(null);
-            }
-        }
-
-        return $this;
-    }
+  
+    
 
     /**
      * @return Collection<int, Favorites>

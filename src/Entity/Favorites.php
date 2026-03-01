@@ -14,16 +14,18 @@ class Favorites
     private ?int $id = null;
 
     #[ORM\ManyToOne(inversedBy: 'favorite_id')]
+    #[ORM\JoinColumn(name: "user_id", referencedColumnName: "id", nullable: false, onDelete: "CASCADE")]
     private ?User $user_id = null;
 
     #[ORM\ManyToOne(inversedBy: 'favorite_id')]
+    #[ORM\JoinColumn(name: "vehicle_id", referencedColumnName: "id", nullable: false, onDelete: "CASCADE")]
     private ?Vehicles $vehicle_id = null;
 
     #[ORM\Column(nullable: true)]
     private ?\DateTime $created_at = null;
 
-    #[ORM\Column]
-    private ?bool $isFavorite = false;
+    #[ORM\Column(type: "boolean", options: ["default" => false])]
+    private bool $isFavorite = false;
     
      
 
@@ -43,7 +45,7 @@ class Favorites
 
         return $this;
     }
-    public function isFavorite(): ?bool
+    public function isFavorite(): bool
     {
         return $this->isFavorite;
     }

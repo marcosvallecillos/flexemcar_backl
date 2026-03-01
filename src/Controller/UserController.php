@@ -46,11 +46,21 @@ final class UserController extends AbstractController
                 'telefono' => $usuario->getTelefono(),
                 'rol' => $usuario->getRol(),
                 'reservas' => $usuario->getReservas()->map(function($reserva) {
+                    $vehicles = $reserva->getVehiclesId();
+                    $vehicleData = [];
+                    foreach ($vehicles as $vehicle) {
+                        $vehicleData[] = [
+                            'id' => $vehicle->getId(),
+                            'modelo' => $vehicle->getModel(),
+                            'marca' => $vehicle->getMarca()
+                        ];
+                    }
                     return [
                         'id' => $reserva->getId(),
-                        'vehiculo' => $reserva->getVehicleId()->getModel(),
-                        'fecha' => $reserva->getDate(),
-                        'estado' => $reserva->getStatus()
+                        'dia' => $reserva->getDia() ? $reserva->getDia()->format('Y-m-d') : null,
+                        'hora' => $reserva->getHora() ? $reserva->getHora()->format('H:i:s') : null,
+                        'estado' => $reserva->getStatus(),
+                        'vehiculos' => $vehicleData
                     ];
                 })->toArray()
             ];
@@ -102,43 +112,108 @@ final class UserController extends AbstractController
                 ->from('marcosvalleu@gmail.com')
                 ->to($usuario->getEmail())
                 ->subject('¡Bienvenido a FlexemCar! 🚐')
-                ->html(
-                    '<div style="font-family: Arial, sans-serif; line-height:1.6;">
-                        <h2 style="color:#2c3e50;">¡Bienvenido a FlexemCar!</h2>
+                ->html('<!DOCTYPE html>
+                        <html>
+                        <head>
+                        <meta charset="UTF-8">
+                        </head>
+                        <body style="margin:0; padding:0; background-color:#f4f6f9; font-family:Arial, sans-serif;">
 
-                        <p>Hola <strong>' . htmlspecialchars($usuario->getName()) . '</strong>,</p>
+                        <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+                        <tr>
+                        <td align="center">
 
-                        <p>Gracias por registrarte en nuestra plataforma de compra y venta de furgonetas.</p>
+                        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);">
 
-                        <p>Ahora puedes:</p>
-                        <ul>
-                            <li>Explorar nuestro catálogo actualizado</li>
-                            <li>Guardar tus vehículos favoritos</li>
-                            <li>Solicitar información personalizada</li>
-                            <li>Reservar una furgoneta fácilmente</li>
-                        </ul>
+                        <!-- HEADER -->
+                        <tr>
+                        <td style="background:#111827; padding:30px; text-align:center;">
+                        <h1 style="color:#ffffff; margin:0; font-size:24px;">
+                        🚐 FlexemCar
+                        </h1>
+                        <p style="color:#9ca3af; margin:5px 0 0 0; font-size:14px;">
+                        Bienvenido a nuestra plataforma
+                        </p>
+                        </td>
+                        </tr>
 
-                        <p>Si quieres atención directa y rápida, nuestro equipo puede asesorarte por WhatsApp.</p>
+                        <!-- BODY -->
+                        <tr>
+                        <td style="padding:35px;">
 
-                        <div style="margin:30px 0;">
-                            <a href="https://wa.me/34600000000/text=Hola" target="_blank"
-                            style="background-color:#25D366;
-                                    color:white;
-                                    padding:15px 25px;
-                                    text-decoration:none;
-                                    border-radius:5px;
-                                    font-weight:bold;">
-                            Hablar con un asesor por WhatsApp
-                            </a>
+                        <h2 style="color:#111827; margin-top:0;">
+                        ¡Tu cuenta ha sido creada correctamente!
+                        </h2>
+
+                        <p style="color:#4b5563; font-size:15px;">
+                        Hola <strong>' . htmlspecialchars($usuario->getName()) . ' ' . htmlspecialchars($usuario->getLastName()) . '</strong>,
+                        </p>
+
+                        <p style="color:#4b5563; font-size:15px;">
+                        Te damos la bienvenida a FlexemCar. A partir de ahora puedes gestionar tus reservas y acceder a nuestro catálogo exclusivo de furgonetas.
+                        </p>
+
+                        <!-- DATOS DEL USUARIO -->
+                        <table width="100%" cellpadding="10" cellspacing="0" style="margin-top:20px; border-collapse:collapse;">
+
+                        <tr style="background:#f9fafb;">
+                        <td style="font-weight:bold;">Correo electrónico</td>
+                        <td>' . htmlspecialchars($usuario->getEmail()) . '</td>
+                        </tr>
+
+                        <tr>
+                        <td style="font-weight:bold;">Teléfono</td>
+                        <td>' . htmlspecialchars($usuario->getTelefono()) . '</td>
+                        </tr>
+
+                        <tr style="background:#f9fafb;">
+                        <td style="font-weight:bold;">Rol asignado</td>
+                        <td>' . htmlspecialchars($usuario->getRol()) . '</td>
+                        </tr>
+
+                        </table>
+
+                        <!-- CTA -->
+                        <div style="text-align:center; margin:35px 0;">
+                        <a href="https://flexemcar.com/login"
+                        style="
+                        background:#111827;
+                        color:#ffffff;
+                        padding:14px 28px;
+                        text-decoration:none;
+                        border-radius:6px;
+                        font-weight:bold;
+                        display:inline-block;
+                        font-size:14px;
+                        ">
+                        Acceder a mi cuenta
+                        </a>
                         </div>
 
-                        <p>Estamos aquí para ayudarte a encontrar la furgoneta perfecta para tu negocio o uso personal.</p>
+                        <p style="color:#6b7280; font-size:13px; text-align:center;">
+                        Si no has creado esta cuenta o necesitas asistencia, contacta con nuestro equipo lo antes posible.
+                        </p>
 
-                        <p>Un saludo,<br>
-                        <strong>Equipo FlexemCar</strong></p>
-                    </div>'
-                );
+                        </td>
+                        </tr>
 
+                        <!-- FOOTER -->
+                        <tr>
+                        <td style="background:#f3f4f6; padding:20px; text-align:center; font-size:12px; color:#6b7280;">
+                        © ' . date("Y") . ' FlexemCar - Todos los derechos reservados<br>
+                        info@flexemcar.com | +34 600 000 000
+                        </td>
+                        </tr>
+
+                        </table>
+
+                        </td>
+                        </tr>
+                        </table>
+
+                        </body>
+                        </html>
+                        ');
             $mailer->send($email);
             $this->logger->info('Email de confirmación enviado correctamente a ' . $usuario->getEmail());
 
@@ -166,12 +241,22 @@ final class UserController extends AbstractController
             'telefono' => $usuario->getTelefono(),
             'rol'=> $usuario->getRol(),
             'reservas' => $usuario->getReservas()->map(function($reserva) {
-                return [
-                        'id' => $reserva->getId(),
-                        'vehiculo' => $reserva->getVehicleId()->getModel(),
-                        'fecha' => $reserva->getDate(),
-                        'estado' => $reserva->getStatus()
+                $vehicles = $reserva->getVehiclesId();
+                $vehicleData = [];
+                foreach ($vehicles as $vehicle) {
+                    $vehicleData[] = [
+                        'id' => $vehicle->getId(),
+                        'modelo' => $vehicle->getModel(),
+                        'marca' => $vehicle->getMarca()
                     ];
+                }
+                return [
+                    'id' => $reserva->getId(),
+                    'dia' => $reserva->getDia() ? $reserva->getDia()->format('Y-m-d') : null,
+                    'hora' => $reserva->getHora() ? $reserva->getHora()->format('H:i:s') : null,
+                    'estado' => $reserva->getStatus(),
+                    'vehiculos' => $vehicleData
+                ];
             })->toArray()
         ];
         
@@ -264,12 +349,24 @@ final class UserController extends AbstractController
         }
 
         #[Route('/delete/{id}', name: 'app_usuarios_delete', methods: ['DELETE'])]
-    public function delete(int $id, UserRepository $userRepository, EntityManagerInterface $entityManager): JsonResponse
+    public function delete(int $id, UserRepository $UserRepository, EntityManagerInterface $entityManager): JsonResponse
     {
         try {
-            $usuario = $userRepository->find($id);
+            $usuario = $UserRepository->find($id);
             if (!$usuario) {
                 return new JsonResponse(['error' => 'Usuario no encontrado'], 404);
+            }
+
+            // Eliminar reservas asociadas (cascade debería hacerlo automáticamente, pero por si acaso)
+            $reservas = $entityManager->getRepository(Reservas::class)->findBy(['user' => $usuario]);
+            foreach ($reservas as $reserva) {
+                $entityManager->remove($reserva);
+            }
+
+            // Eliminar favoritos asociados
+            $favoritos = $entityManager->getRepository(Favorites::class)->findBy(['user_id' => $usuario]);
+            foreach ($favoritos as $favorito) {
+                $entityManager->remove($favorito);
             }
 
             $entityManager->remove($usuario);

@@ -3,12 +3,16 @@
 namespace App\Controller;
 
 use App\Repository\ReservasRepository;
+use App\Repository\ReservasBorradasRepository;
+use App\Repository\ReservasAnuladasRepository;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Doctrine\ORM\EntityManagerInterface;
 use App\Entity\Reservas;
 use App\Entity\Vehicles;
+use App\Entity\ReservasBorradas;
+use App\Entity\ReservasAnuladas;
 use App\Entity\User;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -25,17 +29,29 @@ final class ReservasController extends AbstractController
     
 
     #[Route(name: 'app_reservas_index', methods: ['GET'])]
-    public function index(ReservasRepository $reservasRepository): JsonResponse
+    public function index(ReservasRepository $reservasRepository, EntityManagerInterface $entityManager): JsonResponse
     {
         $reservas = $reservasRepository->findAll();
         $data = [];
         
         foreach ($reservas as $reserva) {
-            $valoracion = $reserva->getReview()->first() ? $reserva->getReview()->first()->getId() : null;
-            $servicioRating = $reserva->getReview()->first() ? $reserva->getReview()->first()->getRating() : null;
-            $comentario = $reserva->getReview()->first() ? $reserva->getReview()->first()->getComment() : null;
-            $fecha = $reserva->getReview()->first() ? $reserva->getReview()->first()->getDate()->format('Y-m-d') : null;
-            $vehiculoId = $reserva->getVehiclesId()->first() ? $reserva->getVehiclesId()->first()->getId() : null;
+            // getReview() devuelve un objeto único o null (OneToOne), no una Collection
+            $review = $reserva->getReview();
+            $valoracion = $review ? $review->getId() : null;
+            $servicioRating = $review ? $review->getRating() : null;
+            $comentario = $review ? $review->getComment() : null;
+            $fecha = $review && $review->getDate() ? $review->getDate()->format('Y-m-d') : null;
+            
+            // Obtener el vehículo asociado a esta reserva
+            $vehicles = $reserva->getVehiclesId();
+            $vehiculoId = null;
+            if (!$vehicles->isEmpty()) {
+                $vehiculoId = $vehicles->first()->getId();
+            } else {
+                // Si la Collection está vacía, buscar directamente en la BD por reserva_id
+                $vehiculo = $entityManager->getRepository(Vehicles::class)->findOneBy(['reserva_id' => $reserva]);
+                $vehiculoId = $vehiculo ? $vehiculo->getId() : null;
+            }
             $data[] = [
                 'id' => $reserva->getId(),
                 'estado' => $reserva->getStatus(),
@@ -107,7 +123,9 @@ final class ReservasController extends AbstractController
         $reserva->setCreatedAt(new \DateTime());
         $reserva->setVehiclesId($vehiculo);
     
+        // Asegurar que el vehículo también se persista para guardar la relación
         $entityManager->persist($reserva);
+        $entityManager->persist($vehiculo);
         $entityManager->flush();
 
         try {
@@ -242,4 +260,304 @@ info@flexemcar.com | +34 600 000 000
             'estado' => $reserva->getStatus()
         ], 201);
     }
+
+      #[Route('/usuario/{id}', name: 'app_reservas_by_usuario', methods: ['GET'])]
+        public function reservasPorUsuario(int $id, ReservasRepository $reservasRepository, EntityManagerInterface $entityManager): JsonResponse
+        {
+            $reservas = $reservasRepository->findBy(['user' => $id]);
+            $data = [];
+        
+        foreach ($reservas as $reserva) {
+            // getReview() devuelve un objeto único o null (OneToOne), no una Collection
+            $review = $reserva->getReview();
+            $valoracion = $review ? $review->getId() : null;
+            $servicioRating = $review ? $review->getRating() : null;
+            $comentario = $review ? $review->getComment() : null;
+            $fecha = $review && $review->getDate() ? $review->getDate()->format('Y-m-d') : null;
+            
+            // Obtener el vehículo asociado a esta reserva
+            $vehicles = $reserva->getVehiclesId();
+            $vehiculoId = null;
+            if (!$vehicles->isEmpty()) {
+                $vehiculoId = $vehicles->first()->getId();
+            } else {
+                // Si la Collection está vacía, buscar directamente en la BD por reserva_id
+                $vehiculo = $entityManager->getRepository(Vehicles::class)->findOneBy(['reserva_id' => $reserva]);
+                $vehiculoId = $vehiculo ? $vehiculo->getId() : null;
+            }
+            $data[] = [
+                'id' => $reserva->getId(),
+                'estado' => $reserva->getStatus(),
+                'dia' => $reserva->getDia()->format('Y-m-d'),
+                'hora' => $reserva->getHora()->format('H:i'),
+                'usuario_id' => $reserva->getUser() ? $reserva->getUser()->getId() : null,
+                'vehiculo_id' => $vehiculoId,
+                'valoracion' => $valoracion,
+                'valoracion_comentario' => $comentario,
+                'valoracion_servicio' => $servicioRating,
+                'valoracion_fecha' => $fecha
+            ];
+        }
+        
+        return new JsonResponse($data);
+        }
+
+    #[Route('/delete/{id}', name: 'app_reservas_delete_id', methods: ['GET','DELETE'])]
+    public function delete(int $id, ReservasRepository $reservasRepository, EntityManagerInterface $entityManager, MailerInterface $mailer): JsonResponse
+    {
+        $reserva = $reservasRepository->find($id);
+        if (!$reserva) {
+            return new JsonResponse(['status' => 'Reserva no encontrada'], 404);
+        }
+    
+        try {
+            // Verificar si la reserva ha expirado
+            $timezone = new \DateTimeZone('Europe/Madrid');
+            $now = new \DateTime('now', $timezone);
+            
+            $fecha = $reserva->getDia();
+            $hora = $reserva->getHora();
+            
+            if (!$fecha || !$hora) {
+                return new JsonResponse([
+                    'status' => 'error',
+                    'message' => 'La reserva no tiene fecha u hora válida'
+                ], 400);
+            }
+            
+            $fechaHoraReserva = new \DateTime($fecha->format('Y-m-d') . ' ' . $hora->format('H:i:s'), $timezone);
+            
+            // Ver si la reserva ha expirado
+            $haExpirado = $fechaHoraReserva <= $now;
+            
+            // Si la reserva ha expirado, moverla a ReservasBorradas
+            if ($haExpirado) {
+                $reservaBorrada = ReservasBorradas::fromReserva($reserva);
+                $entityManager->persist($reservaBorrada);
+                $entityManager->remove($reserva);
+                $entityManager->flush();
+                
+                return new JsonResponse([
+                    'status' => 'success',
+                    'message' => 'Reserva expirada movida a reservas borradas',
+                    'reserva_borrada_id' => $reservaBorrada->getId(),
+                    'usuario_id' => $reservaBorrada->getUsuario()->getId()
+                ]);
+            }
+            
+            // Si la reserva está activa (no ha expirado), moverla a ReservasAnuladas
+            $usuario = $reserva->getUsuario();
+            
+            $reservaAnulada = new ReservasAnuladas();
+            $reservaAnulada->setStatus('anulada');
+            $reservaAnulada->setDia($reserva->getDia());
+            $reservaAnulada->setHora($reserva->getHora());
+            $reservaAnulada->setUserId($usuario);
+            $reservaAnulada->setVehicleId($reserva->getVehiclesId()->first() ?? null);
+            $reservaAnulada->setFechaAnulada(new \DateTime());
+
+            $entityManager->persist($reservaAnulada);
+            $entityManager->flush();
+            # Despues eliminarla de la tabla reserva
+            $entityManager->remove($reserva);
+            $entityManager->flush();
+            
+            // Enviar email solo si hay un usuario asociado
+            if ($usuario && $usuario->getEmail()) {
+                try {
+                    $email = (new Email())
+                        ->from('marcosvalleu@gmail.com')
+                        ->to($usuario->getEmail())
+                        ->subject('Reserva Anulada - HairBooking')
+                        ->html(
+                            '<body style="margin:0; padding:0; background-color:#f4f6f9; font-family:Arial, sans-serif;">
+                                <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+                                <tr>
+                                <td align="center">
+
+                                <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:10px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+
+                                <!-- HEADER -->
+                                <tr>
+                                <td style="background:#111827; padding:30px; text-align:center;">
+                                <h1 style="color:#ffffff; margin:0; font-size:24px;">
+                                🚐 FlexemCar
+                                </h1>
+                                <p style="color:#9ca3af; margin:5px 0 0 0; font-size:14px;">
+                                Reserva anulada
+                                </p>
+                                </td>
+                                </tr>
+
+                                <!-- BODY -->
+                                <tr>
+                                <td style="padding:35px;">
+
+                                <h2 style="color:#b91c1c; margin-top:0;">
+                                Tu reserva ha sido cancelada
+                                </h2>
+
+                                <p style="color:#4b5563; font-size:15px;">
+                                Hola <strong>' . htmlspecialchars($usuario->getName()) . '</strong>,
+                                </p>
+
+                                <p style="color:#4b5563; font-size:15px;">
+                                Te informamos que tu reserva ha sido anulada correctamente. 
+                                A continuación puedes consultar los detalles:
+                                </p>
+
+                                <!-- DETALLES -->
+                                <table width="100%" cellpadding="10" cellspacing="0" style="margin-top:20px; border-collapse:collapse;">
+
+                                <tr style="background:#f9fafb;">
+                                <td style="font-weight:bold;">Vehículo</td>
+                                <td>' . htmlspecialchars($reserva->getVehiclesId()->getMarca()) . ' ' . htmlspecialchars($reserva->getVehiclesId()->getModel()) . '</td>
+                                </tr>
+
+                                <tr>
+                                <td style="font-weight:bold;">Precio</td>
+                                <td>' . number_format($reserva->getVehiclesId()->getPrice(), 2) . ' €</td>
+                                </tr>
+
+                                <tr style="background:#f9fafb;">
+                                <td style="font-weight:bold;">Fecha</td>
+                                <td>' . $reserva->getDia()->format("d/m/Y") . '</td>
+                                </tr>
+
+                                <tr>
+                                <td style="font-weight:bold;">Hora</td>
+                                <td>' . $reserva->getHora()->format("H:i") . '</td>
+                                </tr>
+
+                                <tr style="background:#f9fafb;">
+                                <td style="font-weight:bold;">Estado</td>
+                                <td style="color:#b91c1c; font-weight:bold;">ANULADA</td>
+                                </tr>
+
+                                </table>
+
+                                <!-- CTA -->
+                                <div style="text-align:center; margin:35px 0;">
+                                <a href="https://flexemcar.com/catalogo"
+                                style="
+                                background:#111827;
+                                color:#ffffff;
+                                padding:14px 28px;
+                                text-decoration:none;
+                                border-radius:6px;
+                                font-weight:bold;
+                                display:inline-block;
+                                font-size:14px;
+                                ">
+                                Ver otros vehículos disponibles
+                                </a>
+                                </div>
+
+                                <p style="color:#6b7280; font-size:13px; text-align:center;">
+                                Si tienes cualquier duda o deseas realizar una nueva reserva, nuestro equipo estará encantado de ayudarte.
+                                </p>
+
+                                </td>
+                                </tr>
+
+                                <!-- FOOTER -->
+                                <tr>
+                                <td style="background:#f3f4f6; padding:20px; text-align:center; font-size:12px; color:#6b7280;">
+                                © ' . date("Y") . ' FlexemCar - Todos los derechos reservados<br>
+                                info@flexemcar.com | +34 600 000 000
+                                </td>
+                                </tr>
+
+                                </table>
+
+                                </td>
+                                </tr>
+                                </table>
+
+                                </body>
+                                </html>
+                                ');
+                    
+                    $mailer->send($email);
+                    $this->logger->info('Email de anulación enviado correctamente a ' . $usuario->getEmail());
+                } catch (\Exception $e) {
+                    $this->logger->error('Error al enviar el email de anulación: ' . $e->getMessage());
+                }
+            }
+            
+            return new JsonResponse([
+                'status' => 'success',
+                'message' => 'Reserva anulada y registrada correctamente',
+                'reserva_id' => $reserva->getId()
+            ]);
+            
+        } catch (\Exception $e) {
+            $this->logger->error('Error al eliminar la reserva: ' . $e->getMessage());
+            return new JsonResponse([
+                'status' => 'error',
+                'message' => 'Error al eliminar la reserva: ' . $e->getMessage()
+            ], 500);
+        }
+
+        
+    }
+    #[Route('/filter', name: 'app_reservas_filter', methods: ['GET'])]
+public function filter(Request $request, ReservasRepository $reservasRepository): JsonResponse
+{
+    $tipo = $request->query->get('tipo');
+    $timezone = new \DateTimeZone('Europe/Madrid');
+    $now = new \DateTime('now', $timezone);
+
+    $this->logger->info('Fecha y hora actual: ' . $now->format('Y-m-d H:i:s'));
+
+    if (!in_array($tipo, ['activas', 'expiradas'])) {
+        return new JsonResponse(['error' => 'Tipo de filtro no válido'], 400);
+    }
+
+    $reservas = $reservasRepository->findAll();
+    $data = [];
+
+    foreach ($reservas as $reserva) {
+        $fecha = $reserva->getDia();
+        $hora = $reserva->getHora();
+
+        if (!$fecha || !$hora) {
+            continue;
+        }
+
+        // Crear DateTime para la reserva
+        $fechaHoraReserva = new \DateTime($fecha->format('Y-m-d') . ' ' . $hora->format('H:i:s'), $timezone);
+        
+        $this->logger->info('Reserva ID ' . $reserva->getId() . ': ' . $fechaHoraReserva->format('Y-m-d H:i:s'));
+        
+        // Comparación simple
+        $esExpirada = $fechaHoraReserva <= $now;
+        
+        $this->logger->info('Reserva ID ' . $reserva->getId() . ' es expirada: ' . ($esExpirada ? 'Sí' : 'No'));
+
+        if (
+            ($tipo === 'activas' && !$esExpirada) ||
+            ($tipo === 'expiradas' && $esExpirada)
+        ) {
+            $valoracion = $reserva->getValoracions()->first() ?: null;
+             $data[] = [
+                'id' => $reserva->getId(),
+                'estado' => $reserva->getStatus(),
+                'dia' => $reserva->getDia()->format('Y-m-d'),
+                'hora' => $reserva->getHora()->format('H:i'),
+                'usuario_id' => $reserva->getUser() ? $reserva->getUser()->getId() : null,
+                'vehiculo_id' => $vehiculoId,
+                'valoracion' => $valoracion,
+                'valoracion_comentario' => $comentario,
+                'valoracion_servicio' => $servicioRating,
+                'valoracion_fecha' => $fecha
+            ];
+        }
+    }
+
+    $this->logger->info('Total de reservas encontradas para ' . $tipo . ': ' . count($data));
+    
+    return new JsonResponse($data);
+}
+    
 }

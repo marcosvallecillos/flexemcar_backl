@@ -52,9 +52,6 @@ class Vehicles
 
     #[ORM\ManyToOne(inversedBy: 'vehicles_id')]
     private ?Reservas $reserva_id = null;
-
-    #[ORM\Column]
-    private ?bool $is_favorite = null;
     public function __construct()
     {
         $this->favorite_id = new ArrayCollection();
@@ -210,15 +207,4 @@ class Vehicles
         return $this;
     }
 
-    public function isFavorite(): ?bool
-    {
-        return $this->is_favorite;
-    }
-
-    public function setIsFavorite(bool $is_favorite): static
-    {
-        $this->is_favorite = $is_favorite;
-
-        return $this;
-    }
 }

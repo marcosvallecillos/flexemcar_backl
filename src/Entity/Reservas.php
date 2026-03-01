@@ -16,14 +16,15 @@ class Reservas
     #[ORM\Column]
     private ?int $id = null;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $status = null;
+
     #[ORM\Column(type: Types::DATE_MUTABLE)]
     private ?\DateTimeInterface $dia = null;
 
     #[ORM\Column(type: Types::TIME_MUTABLE)]
     private ?\DateTimeInterface $hora = null;
-
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $status = null;
+    
 
     #[ORM\Column(nullable: true)]
     private ?\DateTime $created_at = null;
@@ -135,6 +136,8 @@ class Reservas
     {
         $this->vehicles_id = new ArrayCollection();
         $this->vehicles_id->add($vehiclesId);
+        // Establecer la relación inversa en el vehículo
+        $vehiclesId->setReservas($this);
         return $this;
     }
 

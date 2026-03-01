@@ -82,11 +82,25 @@ private Collection $reservas;
     #[ORM\OneToMany(targetEntity: Reviews::class, mappedBy: 'usuario_id')]
     private Collection $review;
 
+    /**
+     * @var Collection<int, ReservasBorradas>
+     */
+    #[ORM\OneToMany(targetEntity: ReservasBorradas::class, mappedBy: 'user_id')]
+    private Collection $reservasBorradas;
+
+    /**
+     * @var Collection<int, ReservasAnuladas>
+     */
+    #[ORM\OneToMany(targetEntity: ReservasAnuladas::class, mappedBy: 'user_id')]
+    private Collection $reservasAnuladas;
+
     public function __construct()
     {
         $this->reservas = new ArrayCollection();
         $this->favorite_id = new ArrayCollection();
         $this->review = new ArrayCollection();
+        $this->reservasBorradas = new ArrayCollection();
+        $this->reservasAnuladas = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -245,6 +259,66 @@ private Collection $reservas;
             // set the owning side to null (unless already changed)
             if ($review->getUsuarioId() === $this) {
                 $review->setUsuarioId(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, ReservasBorradas>
+     */
+    public function getReservasBorradas(): Collection
+    {
+        return $this->reservasBorradas;
+    }
+
+    public function addReservasBorrada(ReservasBorradas $reservasBorrada): static
+    {
+        if (!$this->reservasBorradas->contains($reservasBorrada)) {
+            $this->reservasBorradas->add($reservasBorrada);
+            $reservasBorrada->setUserId($this);
+        }
+
+        return $this;
+    }
+
+    public function removeReservasBorrada(ReservasBorradas $reservasBorrada): static
+    {
+        if ($this->reservasBorradas->removeElement($reservasBorrada)) {
+            // set the owning side to null (unless already changed)
+            if ($reservasBorrada->getUserId() === $this) {
+                $reservasBorrada->setUserId(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, ReservasAnuladas>
+     */
+    public function getReservasAnuladas(): Collection
+    {
+        return $this->reservasAnuladas;
+    }
+
+    public function addReservasAnulada(ReservasAnuladas $reservasAnulada): static
+    {
+        if (!$this->reservasAnuladas->contains($reservasAnulada)) {
+            $this->reservasAnuladas->add($reservasAnulada);
+            $reservasAnulada->setUserId($this);
+        }
+
+        return $this;
+    }
+
+    public function removeReservasAnulada(ReservasAnuladas $reservasAnulada): static
+    {
+        if ($this->reservasAnuladas->removeElement($reservasAnulada)) {
+            // set the owning side to null (unless already changed)
+            if ($reservasAnulada->getUserId() === $this) {
+                $reservasAnulada->setUserId(null);
             }
         }
 

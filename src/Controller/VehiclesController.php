@@ -122,6 +122,26 @@ final class VehiclesController extends AbstractController
         }
 
         if ($request->isMethod('GET')) {
+            // Buscar si el vehículo está en favoritos para algun usuario
+            $data = json_decode($request->getContent(), true);
+            $isFavorite = false;
+            
+            if (isset($data['usuario_id'])) {
+                $usuario = $em->getRepository(User::class)->find($data['usuario_id']);
+                if ($usuario) {
+                    $favorito = $em->getRepository(Favorites::class)->createQueryBuilder('f')
+                        ->where('f.user_id = :usuario')
+                        ->andWhere('f.vehicle_id = :vehicle')
+                        ->andWhere('f.isFavorite = :isFavorite')
+                        ->setParameter('usuario', $usuario)
+                        ->setParameter('vehicle', $vehicle)
+                        ->setParameter('isFavorite', true)
+                        ->getQuery()
+                        ->getOneOrNullResult();
+                    $isFavorite = $favorito !== null;
+                }
+            }
+            
             return new JsonResponse([
                 'status' => 'success',
                 'vehicle' => [
@@ -133,9 +153,7 @@ final class VehiclesController extends AbstractController
                     'km' => $vehicle->getKm(),
                     'year' => $vehicle->getYear(),
                     'image_url' => $vehicle->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,
-                    
-                    'favorite' => $vehicle->isFavorite(),
-
+                    'favorite' => $isFavorite,
                 ]
             ]);
         }
@@ -165,12 +183,16 @@ final class VehiclesController extends AbstractController
             $favorito->setCreatedAt(new \DateTime());
         } else {
             // Si existe, alternar el estado
-            $favorito->setIsFavorite(!$favorito->isFavorite());
+            $nuevoEstado = !$favorito->isFavorite();
+            $favorito->setIsFavorite($nuevoEstado);
         }
 
         try {
             $em->persist($favorito);
             $em->flush();
+            
+            // Refrescar el objeto para asegurar que tiene los valores actualizados
+            $em->refresh($favorito);
 
             return new JsonResponse([
                 'status' => 'success',

@@ -50,12 +50,23 @@ class Vehicles
     #[ORM\OneToMany(targetEntity: VehiclesImages::class, mappedBy: 'vehicle_id')]
     private Collection $vehicles_images_id;
 
-    #[ORM\ManyToOne(inversedBy: 'vehicles_id')]
-    private ?Reservas $reserva_id = null;
+    /**
+     * @var Collection<int, Reservas>
+     */
+    #[ORM\OneToMany(mappedBy: 'vehicle', targetEntity: Reservas::class)]
+    private Collection $reservas;
+
+    #[ORM\Column(length: 255)]
+    private ?string $description = null;
+
+    #[ORM\Column]
+    private ?bool $is_favorite = null;
+
     public function __construct()
     {
         $this->favorite_id = new ArrayCollection();
         $this->vehicles_images_id = new ArrayCollection();
+        $this->reservas = new ArrayCollection();
     }
     public function getId(): ?int
     {
@@ -195,14 +206,56 @@ class Vehicles
         return $this;
     }
 
-    public function getReservas(): ?Reservas
+    /**
+     * @return Collection<int, Reservas>
+     */
+    public function getReservas(): Collection
     {
-        return $this->reserva_id;
+        return $this->reservas;
     }
 
-    public function setReservas(?Reservas $reserva_id): static
+    public function addReserva(Reservas $reserva): static
     {
-        $this->reserva_id = $reserva_id;
+        if (!$this->reservas->contains($reserva)) {
+            $this->reservas->add($reserva);
+            $reserva->setVehicle($this);
+        }
+
+        return $this;
+    }
+
+    public function removeReserva(Reservas $reserva): static
+    {
+        if ($this->reservas->removeElement($reserva)) {
+            // set the owning side to null (unless already changed)
+            if ($reserva->getVehicle() === $this) {
+                $reserva->setVehicle(null);
+            }
+        }
+
+        return $this;
+    }
+
+    public function getDescription(): ?string
+    {
+        return $this->description;
+    }
+
+    public function setDescription(string $description): static
+    {
+        $this->description = $description;
+
+        return $this;
+    }
+
+    public function isFavorite(): ?bool
+    {
+        return $this->is_favorite;
+    }
+
+    public function setIsFavorite(bool $is_favorite): static
+    {
+        $this->is_favorite = $is_favorite;
 
         return $this;
     }

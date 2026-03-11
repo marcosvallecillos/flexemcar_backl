@@ -25,8 +25,8 @@ class Reviews
     #[ORM\Column]
     private ?\DateTime $created_at = null;
 
-    #[ORM\OneToOne(cascade: ['persist', 'remove'])]
-    private ?reservas $reserva_id = null;
+    #[ORM\OneToOne(targetEntity: Reservas::class, cascade: ['persist', 'remove'])]
+    private ?Reservas $reserva_id = null;
 
     public function getId(): ?int
     {
@@ -81,12 +81,12 @@ class Reviews
         return $this;
     }
 
-    public function getReservaId(): ?reservas
+    public function getReservaId(): ?Reservas
     {
         return $this->reserva_id;
     }
 
-    public function setReservaId(?reservas $reserva_id): static
+    public function setReservaId(?Reservas $reserva_id): static
     {
         $this->reserva_id = $reserva_id;
 

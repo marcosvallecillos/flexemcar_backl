@@ -33,18 +33,15 @@ class Reservas
     #[ORM\JoinColumn(name: "user_id", referencedColumnName: "id", nullable: false, onDelete: "CASCADE")]
     private ?User $user = null;
 
-    /**
-     * @var Collection<int, Vehicles>
-     */
-    #[ORM\OneToMany(targetEntity: Vehicles::class, mappedBy: 'reserva_id')]
-    private Collection $vehicles_id;
+    #[ORM\ManyToOne(targetEntity: Vehicles::class, inversedBy: 'reservas')]
+    #[ORM\JoinColumn(name: "vehicle_id", referencedColumnName: "id", nullable: false)]
+    private ?Vehicles $vehicle = null;
 
     #[ORM\OneToOne(cascade: ['persist', 'remove'])]
     private ?Reviews $review = null;
 
     public function __construct()
     {
-        $this->vehicles_id = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -126,41 +123,44 @@ class Reservas
     }
 
     /**
-     * @return Collection<int, Vehicles>
+     * Obtiene el vehículo asociado a esta reserva
      */
-    public function getVehiclesId(): Collection
+    public function getVehicle(): ?Vehicles
     {
-        return $this->vehicles_id;
+        return $this->vehicle;
     }
-    public function setVehiclesId(Vehicles $vehiclesId): static
+
+    /**
+     * Establece el vehículo asociado a esta reserva
+     */
+    public function setVehicle(?Vehicles $vehicle): static
     {
-        $this->vehicles_id = new ArrayCollection();
-        $this->vehicles_id->add($vehiclesId);
-        // Establecer la relación inversa en el vehículo
-        $vehiclesId->setReservas($this);
+        $this->vehicle = $vehicle;
         return $this;
     }
 
-    public function addVehiclesId(Vehicles $vehiclesId): static
+    /**
+     * Método de compatibilidad: alias de getVehicle()
+     */
+    public function getVehicleId(): ?Vehicles
     {
-        if (!$this->vehicles_id->contains($vehiclesId)) {
-            $this->vehicles_id->add($vehiclesId);
-            $vehiclesId->setReservaId($this);
-        }
-
-        return $this;
+        return $this->vehicle;
     }
 
-    public function removeVehiclesId(Vehicles $vehiclesId): static
+    /**
+     * Método de compatibilidad: alias de setVehicle()
+     */
+    public function setVehicleId(?Vehicles $vehicle): static
     {
-        if ($this->vehicles_id->removeElement($vehiclesId)) {
-            // set the owning side to null (unless already changed)
-            if ($vehiclesId->getReservaId() === $this) {
-                $vehiclesId->setReservaId(null);
-            }
-        }
+        return $this->setVehicle($vehicle);
+    }
 
-        return $this;
+    /**
+     * Método de compatibilidad: alias de setVehicle()
+     */
+    public function setVehiclesId(Vehicles $vehicle): static
+    {
+        return $this->setVehicle($vehicle);
     }
 
     public function getReview(): ?Reviews

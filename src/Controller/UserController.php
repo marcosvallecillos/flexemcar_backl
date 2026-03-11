@@ -46,9 +46,9 @@ final class UserController extends AbstractController
                 'telefono' => $usuario->getTelefono(),
                 'rol' => $usuario->getRol(),
                 'reservas' => $usuario->getReservas()->map(function($reserva) {
-                    $vehicles = $reserva->getVehiclesId();
+                    $vehicle = $reserva->getVehicle();
                     $vehicleData = [];
-                    foreach ($vehicles as $vehicle) {
+                    if ($vehicle) {
                         $vehicleData[] = [
                             'id' => $vehicle->getId(),
                             'modelo' => $vehicle->getModel(),
@@ -241,9 +241,9 @@ final class UserController extends AbstractController
             'telefono' => $usuario->getTelefono(),
             'rol'=> $usuario->getRol(),
             'reservas' => $usuario->getReservas()->map(function($reserva) {
-                $vehicles = $reserva->getVehiclesId();
+                $vehicle = $reserva->getVehicle();
                 $vehicleData = [];
-                foreach ($vehicles as $vehicle) {
+                if ($vehicle) {
                     $vehicleData[] = [
                         'id' => $vehicle->getId(),
                         'modelo' => $vehicle->getModel(),
@@ -316,7 +316,7 @@ final class UserController extends AbstractController
     }
 
         #[Route('/{id}/edit', methods: ['GET', 'PUT'], name: 'app_usuarios_edit')]
-        public function edit(Request $request, User $usuario, EntityManagerInterface $entityManager): JsonResponse
+        public function edit(Request $request, User $usuario, EntityManagerInterface $entityManager,UserPasswordHasherInterface $passwordHasher): JsonResponse
         {
             // If it's a GET request, return the user data
             if ($request->getMethod() === 'GET') {
@@ -340,7 +340,12 @@ final class UserController extends AbstractController
             $usuario->setLastName($data['apellidos'] ?? $usuario->getLastName());
             $usuario->setEmail($data['email'] ?? $usuario->getEmail());
             $usuario->setTelefono($data['telefono'] ?? $usuario->getTelefono());
-            $usuario->setPassword($data['password'] ?? $usuario->getPassword());
+            $hashedPassword = $passwordHasher->hashPassword(
+            $usuario,
+            $data['password']
+        );
+
+        $usuario->setPassword($hashedPassword) ?? $usuario->getPassword();
             
 
             $entityManager->flush();

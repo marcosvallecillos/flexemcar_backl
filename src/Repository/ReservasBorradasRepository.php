@@ -15,7 +15,15 @@ class ReservasBorradasRepository extends ServiceEntityRepository
     {
         parent::__construct($registry, ReservasBorradas::class);
     }
-
+     public function countByUsuarioId(int $user_id): int
+            {
+                return (int) $this->createQueryBuilder('r')
+                    ->select('COUNT(r.id)')
+                    ->andWhere('r.user_id = :user_id')
+                    ->setParameter('user_id', $user_id)
+                    ->getQuery()
+                    ->getSingleScalarResult();
+            }
     //    /**
     //     * @return ReservasBorradas[] Returns an array of ReservasBorradas objects
     //     */

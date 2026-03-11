@@ -15,7 +15,15 @@ class ReservasRepository extends ServiceEntityRepository
     {
         parent::__construct($registry, Reservas::class);
     }
-
+        public function countByUsuarioId(int $user): int
+            {
+                return (int) $this->createQueryBuilder('r')
+                    ->select('COUNT(r.id)')
+                    ->andWhere('r.user = :user')
+                    ->setParameter('user', $user)
+                    ->getQuery()
+                    ->getSingleScalarResult();
+            }
     //    /**
     //     * @return Reservas[] Returns an array of Reservas objects
     //     */

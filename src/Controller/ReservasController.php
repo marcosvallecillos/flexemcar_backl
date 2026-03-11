@@ -13,6 +13,7 @@ use App\Entity\Reservas;
 use App\Entity\Vehicles;
 use App\Entity\ReservasBorradas;
 use App\Entity\ReservasAnuladas;
+use App\Entity\Reviews;
 use App\Entity\User;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -20,6 +21,10 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 
+use App\Form\UsuariosType;
+use App\Repository\UserRepository;
+use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 #[Route('api/reservas')]
 final class ReservasController extends AbstractController
 {
@@ -35,30 +40,133 @@ final class ReservasController extends AbstractController
         $data = [];
         
         foreach ($reservas as $reserva) {
-            // getReview() devuelve un objeto único o null (OneToOne), no una Collection
             $review = $reserva->getReview();
             $valoracion = $review ? $review->getId() : null;
             $servicioRating = $review ? $review->getRating() : null;
             $comentario = $review ? $review->getComment() : null;
-            $fecha = $review && $review->getDate() ? $review->getDate()->format('Y-m-d') : null;
+            $fecha = $review && $review->getCreatedAt() ? $review->getCreatedAt()->format('Y-m-d') : null;
             
-            // Obtener el vehículo asociado a esta reserva
-            $vehicles = $reserva->getVehiclesId();
-            $vehiculoId = null;
-            if (!$vehicles->isEmpty()) {
-                $vehiculoId = $vehicles->first()->getId();
-            } else {
-                // Si la Collection está vacía, buscar directamente en la BD por reserva_id
-                $vehiculo = $entityManager->getRepository(Vehicles::class)->findOneBy(['reserva_id' => $reserva]);
-                $vehiculoId = $vehiculo ? $vehiculo->getId() : null;
-            }
+            $vehiculo = $reserva->getVehicleId();
+            $vehiculoId = $vehiculo ? $vehiculo->getId() : null;
+            $vehiculoModel = $vehiculo ? $vehiculo->getModel() : null;
+
             $data[] = [
+                'id' => $reserva->getId(),
+                'estado' => $reserva->getStatus(),
+                'dia' => $reserva->getDia()->format('Y-m-d'),
+                'hora' => $reserva->getHora()->format('H:i'),
+                'usuario_id' => $reserva->getUser()?->getId(),
+
+                'vehiculo' => $vehiculo ? [
+                    'id' => $vehiculo->getId(),
+                    'model' => $vehiculo->getModel(),
+                    'marca' => $vehiculo->getMarca(),
+                    'kms' => $vehiculo->getKm(),
+                    'year' => $vehiculo->getYear(),
+                    'image_url' => $vehiculo->getVehiclesImagesId()
+    ->map(fn($img) => 'http://localhost:8000' . $img->getImageUrl())
+    ->toArray() ?? null,
+                ] : null,
+
+    'valoracion' => $valoracion,
+    'valoracion_comentario' => $comentario,
+    'valoracion_servicio' => $servicioRating,
+    'valoracion_fecha' => $fecha
+];
+        }
+        
+        return new JsonResponse($data);
+    }
+    #[Route('/filter', name: 'app_reservas_filter', methods: ['GET'])]
+public function filter(Request $request, ReservasRepository $reservasRepository): JsonResponse
+{
+    $tipo = $request->query->get('tipo');
+    $timezone = new \DateTimeZone('Europe/Madrid');
+    $now = new \DateTime('now', $timezone);
+
+    $this->logger->info('Fecha y hora actual: ' . $now->format('Y-m-d H:i:s'));
+
+    if (!in_array($tipo, ['activas', 'expiradas'])) {
+        return new JsonResponse(['error' => 'Tipo de filtro no válido'], 400);
+    }
+
+    $reservas = $reservasRepository->findAll();
+    $data = [];
+
+    foreach ($reservas as $reserva) {
+        $fecha = $reserva->getDia();
+        $hora = $reserva->getHora();
+        $dateTimeString = ($fecha ? $fecha->format('Y-m-d') : 'null') . ' ' . ($hora ? $hora->format('H:i:s') : 'null');
+        if (!$fecha || !$hora) {
+            continue;
+        }
+
+        $fechaHoraReserva = new \DateTime($fecha->format('Y-m-d') . ' ' . $hora->format('H:i:s'), $timezone);
+        
+        $this->logger->info('Reserva ID ' . $reserva->getId() . ': ' . $fechaHoraReserva->format('Y-m-d H:i:s'));
+        
+        $esExpirada = $fechaHoraReserva <= $now;
+        
+        $this->logger->info('Reserva ID ' . $reserva->getId() . ' es expirada: ' . ($esExpirada ? 'Sí' : 'No'));
+        $vehiculo = $reserva->getVehicleId();
+        $vehiculoId = $vehiculo ? $vehiculo->getId() : null;
+        $vehiculoModel = $vehiculo ? $vehiculo->getModel() : null;
+        if (
+            ($tipo === 'activas' && !$esExpirada) ||
+            ($tipo === 'expiradas' && $esExpirada)
+        ) {
+            $valoracion = $reserva->getReview() ?: null;
+             $data[] = [
                 'id' => $reserva->getId(),
                 'estado' => $reserva->getStatus(),
                 'dia' => $reserva->getDia()->format('Y-m-d'),
                 'hora' => $reserva->getHora()->format('H:i'),
                 'usuario_id' => $reserva->getUser() ? $reserva->getUser()->getId() : null,
                 'vehiculo_id' => $vehiculoId,
+                'vehiculo_model' => $vehiculoModel,
+                'valoracion' => $valoracion ? $valoracion->getRating() : null,
+                'valoracion_comentario' => $valoracion ? $valoracion->getComment() : null,
+                'valoracion_model' => $valoracion && $reserva->getVehicle() ? $reserva->getVehicle()->getModel() : null,
+                'valoracion_fecha' => $dateTimeString
+            ];
+        }
+    }
+
+    $this->logger->info('Total de reservas encontradas para ' . $tipo . ': ' . count($data));
+    
+    return new JsonResponse($data);
+}
+ #[Route('/usuario/{id}', name: 'app_reservas_by_usuario', methods: ['GET'])]
+        public function reservasPorUsuario(int $id, ReservasRepository $reservasRepository, EntityManagerInterface $entityManager): JsonResponse
+        {
+            $reservas = $reservasRepository->findBy(['user' => $id]);
+            $data = [];
+        
+        foreach ($reservas as $reserva) {
+            $review = $reserva->getReview();
+            $valoracion = $review ? $review->getId() : null;
+            $servicioRating = $review ? $review->getRating() : null;
+            $comentario = $review ? $review->getComment() : null;
+            $fecha = $review && $review->getCreatedAt() ? $review->getCreatedAt()->format('Y-m-d') : null;
+            
+            $vehiculo = $reserva->getVehicleId();
+            $data[] = [
+                'id' => $reserva->getId(),
+                'estado' => $reserva->getStatus(),
+                'dia' => $reserva->getDia()->format('Y-m-d'),
+                'hora' => $reserva->getHora()->format('H:i'),
+                'usuario_id' => $reserva->getUser()?->getId(),
+               
+                'vehiculo' => $vehiculo ? [
+                    'id' => $vehiculo->getId(),
+                    'model' => $vehiculo->getModel(),
+                    'marca' => $vehiculo->getMarca(),
+                    'kms' => $vehiculo->getKm(),
+                    'year' => $vehiculo->getYear(),
+ 'image_url' => $vehiculo->getVehiclesImagesId()
+        ->map(fn($img) => 'http://localhost:8000' . $img->getImageUrl())
+        ->toArray() ?? null,                ] : null,
+
                 'valoracion' => $valoracion,
                 'valoracion_comentario' => $comentario,
                 'valoracion_servicio' => $servicioRating,
@@ -67,8 +175,7 @@ final class ReservasController extends AbstractController
         }
         
         return new JsonResponse($data);
-    }
-
+        }
      #[Route('/new', name: 'app_reservas_new', methods: ['GET', 'POST'])]
     public function new(
         Request $request,
@@ -121,7 +228,7 @@ final class ReservasController extends AbstractController
         $reserva->setHora($hora);
         $reserva->setUser($usuario);
         $reserva->setCreatedAt(new \DateTime());
-        $reserva->setVehiclesId($vehiculo);
+        $reserva->setVehicle($vehiculo);
     
         // Asegurar que el vehículo también se persista para guardar la relación
         $entityManager->persist($reserva);
@@ -261,48 +368,7 @@ info@flexemcar.com | +34 600 000 000
         ], 201);
     }
 
-      #[Route('/usuario/{id}', name: 'app_reservas_by_usuario', methods: ['GET'])]
-        public function reservasPorUsuario(int $id, ReservasRepository $reservasRepository, EntityManagerInterface $entityManager): JsonResponse
-        {
-            $reservas = $reservasRepository->findBy(['user' => $id]);
-            $data = [];
-        
-        foreach ($reservas as $reserva) {
-            // getReview() devuelve un objeto único o null (OneToOne), no una Collection
-            $review = $reserva->getReview();
-            $valoracion = $review ? $review->getId() : null;
-            $servicioRating = $review ? $review->getRating() : null;
-            $comentario = $review ? $review->getComment() : null;
-            $fecha = $review && $review->getDate() ? $review->getDate()->format('Y-m-d') : null;
-            
-            // Obtener el vehículo asociado a esta reserva
-            $vehicles = $reserva->getVehiclesId();
-            $vehiculoId = null;
-            if (!$vehicles->isEmpty()) {
-                $vehiculoId = $vehicles->first()->getId();
-            } else {
-                // Si la Collection está vacía, buscar directamente en la BD por reserva_id
-                $vehiculo = $entityManager->getRepository(Vehicles::class)->findOneBy(['reserva_id' => $reserva]);
-                $vehiculoId = $vehiculo ? $vehiculo->getId() : null;
-            }
-            $data[] = [
-                'id' => $reserva->getId(),
-                'estado' => $reserva->getStatus(),
-                'dia' => $reserva->getDia()->format('Y-m-d'),
-                'hora' => $reserva->getHora()->format('H:i'),
-                'usuario_id' => $reserva->getUser() ? $reserva->getUser()->getId() : null,
-                'vehiculo_id' => $vehiculoId,
-                'valoracion' => $valoracion,
-                'valoracion_comentario' => $comentario,
-                'valoracion_servicio' => $servicioRating,
-                'valoracion_fecha' => $fecha
-            ];
-        }
-        
-        return new JsonResponse($data);
-        }
-
-    #[Route('/delete/{id}', name: 'app_reservas_delete_id', methods: ['GET','DELETE'])]
+      #[Route('/delete/{id}', name: 'app_reservas_delete_id', methods: ['GET','DELETE'])]
     public function delete(int $id, ReservasRepository $reservasRepository, EntityManagerInterface $entityManager, MailerInterface $mailer): JsonResponse
     {
         $reserva = $reservasRepository->find($id);
@@ -327,13 +393,54 @@ info@flexemcar.com | +34 600 000 000
             
             $fechaHoraReserva = new \DateTime($fecha->format('Y-m-d') . ' ' . $hora->format('H:i:s'), $timezone);
             
+            // Obtener el vehículo asociado antes de eliminar la reserva
+            $vehiculo = $reserva->getVehicleId();
+            
+            // Obtener la review asociada (si existe) para desvincularla antes de eliminar
+            $review = $reserva->getReview();
+
             // Ver si la reserva ha expirado
             $haExpirado = $fechaHoraReserva <= $now;
             
             // Si la reserva ha expirado, moverla a ReservasBorradas
             if ($haExpirado) {
+                // Verificar si el vehículo ya está asociado a otra reserva borrada
+                $vehiculoParaBorrada = null;
+                if ($vehiculo) {
+                    $reservaBorradaExistente = $entityManager->getRepository(ReservasBorradas::class)
+                        ->findOneBy(['vehicle_id' => $vehiculo]);
+                    
+                    // Solo asignar el vehículo si no está ya asociado a otra reserva borrada
+                    if (!$reservaBorradaExistente) {
+                        $vehiculoParaBorrada = $vehiculo;
+                    }
+                }
+                
                 $reservaBorrada = ReservasBorradas::fromReserva($reserva);
+                // Sobrescribir el vehículo si ya está asociado a otra reserva borrada
+                if ($vehiculoParaBorrada === null && $vehiculo) {
+                    $reservaBorrada->setVehicleId(null);
+                }
                 $entityManager->persist($reservaBorrada);
+                
+                // Desvincular el vehículo de la reserva antes de eliminarla
+                if ($vehiculo) {
+                    $vehiculo->removeReserva($reserva);
+                    $entityManager->persist($vehiculo);
+                }
+                
+                // Desvincular la review de la reserva antes de eliminarla
+                if ($review) {
+                    $reserva->setReview(null);
+                    // También desvincular la reserva de la review
+                    $review->setReservaId(null);
+                    $entityManager->persist($review);
+                }
+                
+                // Hacer flush primero para asegurar que todas las relaciones se actualicen
+                $entityManager->flush();
+                
+                // Después eliminarla de la tabla reserva
                 $entityManager->remove($reserva);
                 $entityManager->flush();
                 
@@ -341,24 +448,53 @@ info@flexemcar.com | +34 600 000 000
                     'status' => 'success',
                     'message' => 'Reserva expirada movida a reservas borradas',
                     'reserva_borrada_id' => $reservaBorrada->getId(),
-                    'usuario_id' => $reservaBorrada->getUsuario()->getId()
+                    'usuario_id' => $reservaBorrada->getUserId() ? $reservaBorrada->getUserId()->getId() : null
                 ]);
             }
             
-            // Si la reserva está activa (no ha expirado), moverla a ReservasAnuladas
-            $usuario = $reserva->getUsuario();
+            // Si la reserva está activa, moverla a ReservasAnuladas
+            $usuario = $reserva->getUser();
+            
+            // Verificar si el vehículo ya está asociado a otra reserva anulada
+            $vehiculoParaAnulada = null;
+            if ($vehiculo) {
+                $reservaAnuladaExistente = $entityManager->getRepository(ReservasAnuladas::class)
+                    ->findOneBy(['vehicle_id' => $vehiculo]);
+                
+                // Solo asignar el vehículo si no está ya asociado a otra reserva anulada
+                if (!$reservaAnuladaExistente) {
+                    $vehiculoParaAnulada = $vehiculo;
+                }
+            }
             
             $reservaAnulada = new ReservasAnuladas();
             $reservaAnulada->setStatus('anulada');
             $reservaAnulada->setDia($reserva->getDia());
             $reservaAnulada->setHora($reserva->getHora());
             $reservaAnulada->setUserId($usuario);
-            $reservaAnulada->setVehicleId($reserva->getVehiclesId()->first() ?? null);
+            $reservaAnulada->setVehicleId($vehiculoParaAnulada);
             $reservaAnulada->setFechaAnulada(new \DateTime());
 
             $entityManager->persist($reservaAnulada);
+            
+            // Desvincular el vehículo de la reserva antes de eliminarla
+            if ($vehiculo) {
+                $vehiculo->removeReserva($reserva);
+                $entityManager->persist($vehiculo);
+            }
+            
+            // Desvincular la review de la reserva antes de eliminarla
+            if ($review) {
+                $reserva->setReview(null);
+                // También desvincular la reserva de la review
+                $review->setReservaId(null);
+                $entityManager->persist($review);
+            }
+            
+            // Hacer flush primero para asegurar que todas las relaciones se actualicen
             $entityManager->flush();
-            # Despues eliminarla de la tabla reserva
+            
+            // Después eliminarla de la tabla reserva
             $entityManager->remove($reserva);
             $entityManager->flush();
             
@@ -411,12 +547,12 @@ info@flexemcar.com | +34 600 000 000
 
                                 <tr style="background:#f9fafb;">
                                 <td style="font-weight:bold;">Vehículo</td>
-                                <td>' . htmlspecialchars($reserva->getVehiclesId()->getMarca()) . ' ' . htmlspecialchars($reserva->getVehiclesId()->getModel()) . '</td>
+                                <td>' . ($vehiculo ? (htmlspecialchars($vehiculo->getMarca()) . ' ' . htmlspecialchars($vehiculo->getModel())) : 'N/A') . '</td>
                                 </tr>
 
                                 <tr>
                                 <td style="font-weight:bold;">Precio</td>
-                                <td>' . number_format($reserva->getVehiclesId()->getPrice(), 2) . ' €</td>
+                                <td>' . ($vehiculo ? number_format($vehiculo->getPrice(), 2) . ' €' : 'N/A') . '</td>
                                 </tr>
 
                                 <tr style="background:#f9fafb;">
@@ -501,63 +637,147 @@ info@flexemcar.com | +34 600 000 000
 
         
     }
-    #[Route('/filter', name: 'app_reservas_filter', methods: ['GET'])]
-public function filter(Request $request, ReservasRepository $reservasRepository): JsonResponse
+    
+    
+
+       #[Route('/{id<\d+>}', name: 'app_reservas_show', methods: ['GET'])]
+public function show(int $id, ReservasRepository $reservasRepository): JsonResponse
 {
-    $tipo = $request->query->get('tipo');
-    $timezone = new \DateTimeZone('Europe/Madrid');
-    $now = new \DateTime('now', $timezone);
-
-    $this->logger->info('Fecha y hora actual: ' . $now->format('Y-m-d H:i:s'));
-
-    if (!in_array($tipo, ['activas', 'expiradas'])) {
-        return new JsonResponse(['error' => 'Tipo de filtro no válido'], 400);
+    $reserva = $reservasRepository->find($id);
+    if (!$reserva) {
+        return new JsonResponse(['error' => 'Reserva no encontrada'], 404);
     }
 
-    $reservas = $reservasRepository->findAll();
-    $data = [];
+    $review = $reserva->getReview();
+    $valoracion = $review ? $review->getId() : null;
+    $servicioRating = $review ? $review->getRating() : null;
+    $comentario = $review ? $review->getComment() : null;
+    $fecha = $review && $review->getCreatedAt() ? $review->getCreatedAt()->format('Y-m-d') : null;
 
-    foreach ($reservas as $reserva) {
-        $fecha = $reserva->getDia();
-        $hora = $reserva->getHora();
+    $vehiculo = $reserva->getVehicleId();
 
-        if (!$fecha || !$hora) {
-            continue;
-        }
+    $data = [
+        'id' => $reserva->getId(),
+        'estado' => $reserva->getStatus(),
+        'dia' => $reserva->getDia()->format('Y-m-d'),
+        'hora' => $reserva->getHora()->format('H:i'),
+        'usuario_id' => $reserva->getUser()?->getId(),
+        'vehiculo' => $vehiculo ? [
+            'id' => $vehiculo->getId(),
+            'model' => $vehiculo->getModel(),
+            'marca' => $vehiculo->getMarca(),
+            'kms' => $vehiculo->getKm(),
+            'year' => $vehiculo->getYear(),
+            'image_url' => $vehiculo->getVehiclesImagesId()  // ← muévelo aquí dentro
+        ->map(fn($img) => 'http://localhost:8000' . $img->getImageUrl())
+        ->toArray(),
 
-        // Crear DateTime para la reserva
-        $fechaHoraReserva = new \DateTime($fecha->format('Y-m-d') . ' ' . $hora->format('H:i:s'), $timezone);
-        
-        $this->logger->info('Reserva ID ' . $reserva->getId() . ': ' . $fechaHoraReserva->format('Y-m-d H:i:s'));
-        
-        // Comparación simple
-        $esExpirada = $fechaHoraReserva <= $now;
-        
-        $this->logger->info('Reserva ID ' . $reserva->getId() . ' es expirada: ' . ($esExpirada ? 'Sí' : 'No'));
+        ] : null,
+        'valoracion' => $valoracion,
+        'valoracion_comentario' => $comentario,
+        'valoracion_servicio' => $servicioRating,
+        'valoracion_fecha' => $fecha
+    ];
 
-        if (
-            ($tipo === 'activas' && !$esExpirada) ||
-            ($tipo === 'expiradas' && $esExpirada)
-        ) {
-            $valoracion = $reserva->getValoracions()->first() ?: null;
-             $data[] = [
+    return new JsonResponse($data);
+}
+    #[Route('/{id}/edit', name: 'app_reservas_edit', methods: ['GET', 'PUT'])]
+public function edit(Request $request, int $id, ReservasRepository $reservasRepository, EntityManagerInterface $entityManager): JsonResponse
+{
+    $reserva = $reservasRepository->find($id);
+    if (!$reserva) {
+        return new JsonResponse(['error' => 'Reserva no encontrada'], 404);
+    }
+    $vehiculo = $reserva->getVehicleId();
+    $review = $reserva->getReview();
+    $valoracion = $review ? $review->getId() : null;
+    $servicioRating = $review ? $review->getRating() : null;
+    $comentario = $review ? $review->getComment() : null;
+    $fecha = $review && $review->getCreatedAt() ? $review->getCreatedAt()->format('Y-m-d') : null;
+
+        if ($request->getMethod() === 'GET') {
+            $data = [
                 'id' => $reserva->getId(),
                 'estado' => $reserva->getStatus(),
                 'dia' => $reserva->getDia()->format('Y-m-d'),
                 'hora' => $reserva->getHora()->format('H:i'),
-                'usuario_id' => $reserva->getUser() ? $reserva->getUser()->getId() : null,
-                'vehiculo_id' => $vehiculoId,
+                'usuario_id' => $reserva->getUser()?->getId(),
+                'vehiculo' => $vehiculo ? [
+                    'id' => $vehiculo->getId(),
+                    'model' => $vehiculo->getModel(),
+                    'marca' => $vehiculo->getMarca(),
+                    'kms' => $vehiculo->getKm(),
+                    'year' => $vehiculo->getYear(),
+                    'image' => $vehiculo->getVehiclesImagesId(),
+                ] : null,
+
                 'valoracion' => $valoracion,
                 'valoracion_comentario' => $comentario,
                 'valoracion_servicio' => $servicioRating,
                 'valoracion_fecha' => $fecha
             ];
+            
+            return new JsonResponse($data);
         }
+        
+        // For PUT requests, update the reservation
+        $data = json_decode($request->getContent(), true);
+        
+        if ($data === null) {
+            return new JsonResponse(['status' => 'JSON inválido'], 400);
+        }
+        
+
+        if (isset($data['dia'])) {
+            try {
+                $dia = new \DateTime($data['dia']);
+                $reserva->setDia($dia);
+            } catch (\Exception $e) {
+                return new JsonResponse(['status' => 'Formato de fecha inválido'], 400);
+            }
+        }
+        
+        if (isset($data['hora'])) {
+            try {
+                $hora = \DateTime::createFromFormat('H:i', $data['hora']);
+                if ($hora === false) {
+                    return new JsonResponse(['status' => 'Formato de hora inválido'], 400);
+                }
+                $reserva->setHora($hora);
+            } catch (\Exception $e) {
+                return new JsonResponse(['status' => 'Formato de hora inválido'], 400);
+            }
+        }
+        
+        if (isset($data['usuario_id'])) {
+            $usuario = $entityManager->getRepository(User::class)->find($data['usuario_id']);
+            if (!$usuario) {
+                return new JsonResponse(['status' => 'Usuario no encontrado'], 404);
+            }
+            $reserva->setUser($usuario);
+        }
+        
+        $entityManager->flush();
+        
+        return new JsonResponse(['status' => 'Reserva actualizada']);
     }
 
-    $this->logger->info('Total de reservas encontradas para ' . $tipo . ': ' . count($data));
-    
-    return new JsonResponse($data);
-}
-    
+    #[Route('/usuario/{id}/count', methods: ['GET'])]
+        public function countReservasPorUsuario(
+            int $id,
+            ReservasRepository $reservasRepository,
+            ReservasBorradasRepository $reservasBorradasRepository,
+            EntityManagerInterface $entityManager
+        ): JsonResponse {
+            $total = $reservasRepository->countByUsuarioId($id)
+                   + $reservasBorradasRepository->countByUsuarioId($id);
+        
+            $usuario = $entityManager->getRepository(User::class)->find($id);
+        
+        
+            return $this->json([
+                'usuarioId' => $id,
+                'totalReservas' => $total
+            ]);
+        }
 }

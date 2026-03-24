@@ -23,10 +23,12 @@ class ReservasAnuladas
     #[ORM\Column(type: Types::TIME_MUTABLE)]
     private ?\DateTime $hora = null;
 
-    #[ORM\ManyToOne(inversedBy: 'reservasAnuladas')]
-    private ?User $user_id = null;
+   #[ORM\ManyToOne(inversedBy: 'reservasAnuladas')]
+#[ORM\JoinColumn(name: 'user_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+private ?User $user_id = null;
 
-    #[ORM\OneToOne(cascade: ['persist', 'remove'])]
+    #[ORM\ManyToOne(targetEntity: Vehicles::class)]
+    #[ORM\JoinColumn(name: 'vehicle_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
     private ?Vehicles $vehicle_id = null;
 
     #[ORM\Column]

@@ -13,7 +13,7 @@ class Reviews
     #[ORM\Column]
     private ?int $id = null;
 
-    #[ORM\ManyToOne(inversedBy: 'rating')]
+    #[ORM\ManyToOne(inversedBy: 'review')]
     private ?User $usuario_id = null;
 
     #[ORM\Column]

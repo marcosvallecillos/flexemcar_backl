@@ -423,13 +423,7 @@ info@flexemcar.com | +34 600 000 000
                 }
                 $entityManager->persist($reservaBorrada);
                 
-                // Desvincular el vehículo de la reserva antes de eliminarla
-                if ($vehiculo) {
-                    $vehiculo->removeReserva($reserva);
-                    $entityManager->persist($vehiculo);
-                }
-                
-                // Desvincular la review de la reserva antes de eliminarla
+                // Desvincular la review de la reserva antes de eliminarla (para que no se borre en cascada)
                 if ($review) {
                     $reserva->setReview(null);
                     // También desvincular la reserva de la review
@@ -437,10 +431,7 @@ info@flexemcar.com | +34 600 000 000
                     $entityManager->persist($review);
                 }
                 
-                // Hacer flush primero para asegurar que todas las relaciones se actualicen
-                $entityManager->flush();
-                
-                // Después eliminarla de la tabla reserva
+                // Eliminar de la tabla reserva y persistir los cambios
                 $entityManager->remove($reserva);
                 $entityManager->flush();
                 
@@ -477,13 +468,7 @@ info@flexemcar.com | +34 600 000 000
 
             $entityManager->persist($reservaAnulada);
             
-            // Desvincular el vehículo de la reserva antes de eliminarla
-            if ($vehiculo) {
-                $vehiculo->removeReserva($reserva);
-                $entityManager->persist($vehiculo);
-            }
-            
-            // Desvincular la review de la reserva antes de eliminarla
+            // Desvincular la review de la reserva antes de eliminarla (para que no se borre en cascada)
             if ($review) {
                 $reserva->setReview(null);
                 // También desvincular la reserva de la review
@@ -491,10 +476,7 @@ info@flexemcar.com | +34 600 000 000
                 $entityManager->persist($review);
             }
             
-            // Hacer flush primero para asegurar que todas las relaciones se actualicen
-            $entityManager->flush();
-            
-            // Después eliminarla de la tabla reserva
+            // Eliminar de la tabla reserva y persistir los cambios
             $entityManager->remove($reserva);
             $entityManager->flush();
             

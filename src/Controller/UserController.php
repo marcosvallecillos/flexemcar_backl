@@ -31,12 +31,12 @@ final class UserController extends AbstractController
     #[Route(name: 'app_usuarios_index', methods: ['GET'])]
     public function index(UserRepository $userRepository): JsonResponse
     {
+
         $usuarios = $userRepository->findAll();
         if (!$usuarios) {
             return new JsonResponse(['message' => 'No se encontraron usuarios'], Response::HTTP_NOT_FOUND);
         }
         $data = [];
-        
         foreach ($usuarios as $usuario) {
             $data[] = [
                 'id' => $usuario->getId(),
@@ -45,6 +45,9 @@ final class UserController extends AbstractController
                 'email' => $usuario->getEmail(),
                 'telefono' => $usuario->getTelefono(),
                 'rol' => $usuario->getRol(),
+                'created_at' => $usuario->getCreatedAt()?->format('Y-m-d') ?? 'Sin fecha',
+                'last_login' => $usuario->getLastLogin()?->format('Y-m-d H:i:s') ?? null,
+
                 'reservas' => $usuario->getReservas()->map(function($reserva) {
                     $vehicle = $reserva->getVehicle();
                     $vehicleData = [];
@@ -74,7 +77,9 @@ final class UserController extends AbstractController
         Request $request,
         EntityManagerInterface $entityManager,
         MailerInterface $mailer,
-        UserPasswordHasherInterface $passwordHasher
+        UserPasswordHasherInterface $passwordHasher,   
+        UserRepository $userRepository  
+
     ): Response
     {
         $data = json_decode($request->getContent(), true);
@@ -87,11 +92,14 @@ final class UserController extends AbstractController
             return new JsonResponse(['status' => 'El password es obligatorio'], 400);
         }
 
-        // Validar teléfono: exactamente 9 dígitos numéricos
+        // Validar teléfono para q sean 9 digitos
         if (!isset($data['telefono']) || !preg_match('/^\d{9}$/', (string) $data['telefono'])) {
             return new JsonResponse(['status' => 'El teléfono debe tener 9 dígitos'], 400);
         }
-    
+        $emailExistente = $userRepository->findOneBy(['email' => $data['email'] ?? null]);
+    if ($emailExistente) {
+        return new JsonResponse(['status' => 'Este correo ya está en uso'], 409);
+    }
     
         $usuario = new User();
         $usuario->setName($data['nombre'] ?? null);
@@ -105,6 +113,7 @@ final class UserController extends AbstractController
         $usuario->setPassword($hashedPassword);
         $usuario->setTelefono($data['telefono'] ?? null);
         $usuario->setRol($data['rol'] ?? null);
+        $usuario->setCreatedAt(new \DateTime());
         $entityManager->persist($usuario);
         $entityManager->flush();
         try {
@@ -262,7 +271,16 @@ final class UserController extends AbstractController
         
         return new JsonResponse($data);
     }
-    
+    #[Route('/{id}/last-login', name: 'app_usuarios_last_login', methods: ['POST'])]
+public function updateLastLogin(
+    User $usuario,
+    EntityManagerInterface $entityManager
+): JsonResponse {
+    $usuario->setLastLogin(new \DateTime());
+    $entityManager->flush();
+
+    return new JsonResponse(['status' => 'ok']);
+}
     #[Route('/login', name: 'app_usuarios_login', methods: ['GET','POST'])]
     public function login(
         Request $request,
@@ -301,6 +319,7 @@ final class UserController extends AbstractController
                 'message' => 'Credenciales inválidas'
             ], 401);
         }
+$user->setLastLogin(new \DateTime());
 
         $result = [
             'status' => 'ok',
@@ -310,6 +329,8 @@ final class UserController extends AbstractController
             'apellidos' => $user->getLastName(),
             'telefono' => $user->getTelefono(),
             'rol' => $user->getRol(),
+            'last_login' => $user->getLastLogin()?->format('Y-m-d H:i:s'),
+
         ];
 
         return new JsonResponse($result);

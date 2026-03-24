@@ -28,8 +28,9 @@ class ReservasBorradas
     #[ORM\Column]
     private ?\DateTime $borradaEn = null;
 
-    #[ORM\OneToOne(cascade: ['persist', 'remove'])]
-    private ?Vehicles $vehicle_id = null;
+   #[ORM\ManyToOne(targetEntity: Vehicles::class)]
+#[ORM\JoinColumn(name: 'vehicle_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+private ?Vehicles $vehicle_id = null;
 
     public function getId(): ?int
     {

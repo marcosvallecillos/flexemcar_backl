@@ -38,6 +38,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 50, nullable: true)]
     private ?string $rol = null;
 
+    #[ORM\Column(type: 'datetime',nullable: true)]
+    private ?\DateTime $created_at = null;
+
+    #[ORM\Column(type: 'datetime', nullable: true)]
+private ?\DateTime $last_login = null;
+
+
     /**
      * @var Collection<int, Reservas>
      */
@@ -324,4 +331,27 @@ private Collection $reservas;
 
         return $this;
     }
+
+    public function getCreatedAt(): ?\DateTime
+    {
+        return $this->created_at;
+    }
+
+    public function setCreatedAt(\DateTime $created_at): static
+    {
+        $this->created_at = $created_at;
+
+        return $this;
+    }
+
+    public function getLastLogin(): ?\DateTime
+{
+    return $this->last_login;
+}
+
+public function setLastLogin(\DateTime $last_login): static
+{
+    $this->last_login = $last_login;
+    return $this;
+}
 }

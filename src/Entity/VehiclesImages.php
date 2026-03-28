@@ -14,6 +14,7 @@ class VehiclesImages
     private ?int $id = null;
 
     #[ORM\ManyToOne(inversedBy: 'vehicles_images_id')]
+    #[ORM\JoinColumn(name: "vehicle_id", referencedColumnName: "id", nullable: false, onDelete: "CASCADE")]
     private ?Vehicles $vehicle_id = null;
 
     #[ORM\Column(length: 255, nullable: true)]

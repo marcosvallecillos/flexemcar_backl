@@ -34,7 +34,7 @@ class Reservas
     private ?User $user = null;
 
     #[ORM\ManyToOne(targetEntity: Vehicles::class, inversedBy: 'reservas')]
-    #[ORM\JoinColumn(name: "vehicle_id", referencedColumnName: "id", nullable: false)]
+    #[ORM\JoinColumn(name: "vehicle_id", referencedColumnName: "id", nullable: false, onDelete: "CASCADE")]
     private ?Vehicles $vehicle = null;
 
     #[ORM\OneToOne(cascade: ['persist', 'remove'])]

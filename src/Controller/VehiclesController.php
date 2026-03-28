@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
+use App\Entity\VehiclesImages;
 
 #[Route('/api/vehicles')]
 final class VehiclesController extends AbstractController
@@ -60,7 +61,7 @@ final class VehiclesController extends AbstractController
             'description' => $vehicle->getDescription(),
             'is_favorite' => in_array($vehicle->getId(), $favoritosIds), // ← por usuario
             'image_url'   => $vehicle->getVehiclesImagesId()
-                ->map(fn($img) => 'http://localhost:8000' . $img->getImageUrl())
+                ->map(fn($img) =>  $img->getImageUrl())
                 ->toArray(),
             'reservas'    => $vehicle->getReservas()->map(fn($r) => [
                 'id'     => $r->getId(),
@@ -73,7 +74,7 @@ final class VehiclesController extends AbstractController
 
     return $this->json($data);
 }
-#[Route('/new', name: 'app_vehicles_new', methods: ['POST'])]
+#[Route('/create', name: 'app_vehicles_new', methods: ['POST'])]
     public function new(Request $request, EntityManagerInterface $entityManager): JsonResponse
     
     {
@@ -91,6 +92,15 @@ final class VehiclesController extends AbstractController
         $vehicle->setPrice($data['precio'] ?? null);
          $vehicle->setDescription($data['descripcion'] ?? null);
         $vehicle->setIsFavorite($data['is_favorite'] ?? null);
+      if (!empty($data['images'])) {
+        foreach ($data['images'] as $imageUrl) {
+            $image = new VehiclesImages();
+            $image->setImageUrl($imageUrl);
+            $image->setVehicleId($vehicle); // relación inversa
+            $vehicle->addVehiclesImagesId($image);
+            $entityManager->persist($image);
+        }
+    }
         $vehicle->setKm($data['km'] ?? null);
         $entityManager->persist($vehicle);
         $entityManager->flush();
@@ -99,7 +109,7 @@ final class VehiclesController extends AbstractController
                 'status' => 'vehicle creado',
                 ], 200);
     }
-#[Route('/{id}', name: 'app_vehicles_show', methods: ['GET'])]
+#[Route('/show/{id}', name: 'app_vehicles_show', methods: ['GET'])]
     public function show(Vehicles $vehicle): JsonResponse
     {
         $reservas = $vehicle->getReservas(); 
@@ -236,6 +246,151 @@ public function agregarAFavoritos(
             'status' => 'success',
             'user_id' => $user_id->getId(),
             'favoritos' => $data
+        ]);
+    }
+    #[Route('/delete/{id}', name: 'app_vehicles_delete', methods: ['GET','DELETE'])]
+    public function delete(Vehicles $vehicles, EntityManagerInterface $entityManager): JsonResponse
+{
+    foreach ($vehicles->getReservas() as $reserva) {
+        $entityManager->remove($reserva);
+    }
+
+    $entityManager->remove($vehicles);
+    $entityManager->flush();
+
+    return new JsonResponse(['message' => 'Vehiculo eliminado con éxito'], 200);
+}
+
+
+    #[Route('/filter/price', name: 'app_vehicles_filter_price', methods: ['GET'])]
+    public function filterByPrice(int $id = null,Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $minPrice = $request->query->get('min_price');
+        $maxPrice = $request->query->get('max_price');
+
+        // Validar que al menos uno de los precios esté presente
+        if ($minPrice === null && $maxPrice === null) {
+            return new JsonResponse([
+                'error' => 'Debe proporcionar al menos un precio (min_price o max_price)'
+            ], 400);
+        }
+
+        $qb = $em->createQueryBuilder();
+        $qb->select('p')
+           ->from(Vehicles::class, 'p');
+
+        if ($minPrice !== null) {
+            $qb->andWhere('p.price >= :minPrice')
+               ->setParameter('minPrice', (int)$minPrice);
+        }
+        if ($maxPrice !== null) {
+            $qb->andWhere('p.price <= :maxPrice')
+               ->setParameter('maxPrice', (int)$maxPrice);
+        }
+
+        // Ordenar por precio
+        $qb->orderBy('p.price', 'ASC');
+    $userId = $request->query->get('usuario_id');
+    $favoritosIds = [];
+        if ($userId) {
+            $usuario = $em->getRepository(User::class)->find($userId);
+            if ($usuario) {
+                $favoritos = $em->getRepository(Favorites::class)->findBy([
+                    'user_id'    => $usuario,
+                    'isFavorite' => true
+                ]);
+                $favoritosIds = array_map(
+                    fn($f) => $f->getVehicleId()->getId(),
+                    $favoritos
+                );
+            }
+        }
+        $vehicle = $qb->getQuery()->getResult();
+        $data = [];
+        foreach ($vehicle as $vehicles) {
+            $data[] = [
+                'id' => $vehicles->getId(),
+                'marca' => $vehicles->getMarca(),
+                'modelo' => $vehicles->getModel(),
+                'precio' => $vehicles->getPrice(),
+                'motor' => $vehicles->getMotor(),
+                'km' => $vehicles->getKm(),
+                'year' => $vehicles->getYear(),
+                'image_url' => $vehicles->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,    
+                'is_favorite' => in_array($vehicles->getId(), $favoritosIds), 
+            ];
+        }
+
+        return new JsonResponse([
+            'status' => 'success',
+            'total' => count($data),
+            'vehicles' => $data
+        ]);
+    }
+
+    #[Route('/filter/km', name: 'app_vehicles_filter_km', methods: ['GET'])]
+    public function filterByKm(int $id = null,Request $request, EntityManagerInterface $em): JsonResponse
+    {
+        $minKm = $request->query->get('min_km');
+        $maxKm = $request->query->get('max_km');
+
+        // Validar que al menos uno de los precios esté presente
+        if ($minKm === null && $maxKm === null) {
+            return new JsonResponse([
+                'error' => 'Debe proporcionar al menos un precio (min_price o max_price)'
+            ], 400);
+        }
+
+        $qb = $em->createQueryBuilder();
+        $qb->select('p')
+           ->from(Vehicles::class, 'p');
+
+        if ($minKm !== null) {
+            $qb->andWhere('p.km >= :minKm')
+               ->setParameter('minKm', (int)$minKm);
+        }
+        if ($maxKm !== null) {
+            $qb->andWhere('p.km <= :maxKm')
+               ->setParameter('maxKm', (int)$maxKm);
+        }
+
+        // Ordenar por precio
+        $qb->orderBy('p.km', 'ASC');
+    $userId = $request->query->get('usuario_id');
+    $favoritosIds = [];
+        if ($userId) {
+            $usuario = $em->getRepository(User::class)->find($userId);
+            if ($usuario) {
+                $favoritos = $em->getRepository(Favorites::class)->findBy([
+                    'user_id'    => $usuario,
+                    'isFavorite' => true
+                ]);
+                $favoritosIds = array_map(
+                    fn($f) => $f->getVehicleId()->getId(),
+                    $favoritos
+                );
+            }
+        }
+        $vehicle = $qb->getQuery()->getResult();
+        $data = [];
+        foreach ($vehicle as $vehicles) {
+            $data[] = [
+                'id' => $vehicles->getId(),
+                'marca' => $vehicles->getMarca(),
+                'modelo' => $vehicles->getModel(),
+                'precio' => $vehicles->getPrice(),
+                'motor' => $vehicles->getMotor(),
+                'km' => $vehicles->getKm(),
+                'year' => $vehicles->getYear(),
+                'image_url' => $vehicles->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,    
+                'is_favorite' => in_array($vehicles->getId(), $favoritosIds), 
+            ];
+        }
+
+        return new JsonResponse([
+            'status' => 'success',
+            'total' => count($data),
+            'vehicles' => $data
         ]);
     }
 }

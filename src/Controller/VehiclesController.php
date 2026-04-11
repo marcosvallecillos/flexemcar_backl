@@ -31,14 +31,14 @@ final class VehiclesController extends AbstractController
     Request $request
 ): JsonResponse {
     $vehicles = $vehiclesRepository->findAll();
-    $userId = $request->query->get('usuario_id');
+    $userId = $request->query->get('vehicle_id');
     
     $favoritosIds = [];
     if ($userId) {
-        $usuario = $em->getRepository(User::class)->find($userId);
-        if ($usuario) {
+        $vehicle = $em->getRepository(User::class)->find($userId);
+        if ($vehicle) {
             $favoritos = $em->getRepository(Favorites::class)->findBy([
-                'user_id'    => $usuario,
+                'user_id'    => $vehicle,
                 'isFavorite' => true
             ]);
             $favoritosIds = array_map(
@@ -59,7 +59,7 @@ final class VehiclesController extends AbstractController
             'km'          => $vehicle->getKm(),
             'precio'      => $vehicle->getPrice(),
             'description' => $vehicle->getDescription(),
-            'is_favorite' => in_array($vehicle->getId(), $favoritosIds), // ← por usuario
+            'is_favorite' => in_array($vehicle->getId(), $favoritosIds), // ← por vehicle
             'image_url'   => $vehicle->getVehiclesImagesId()
                 ->map(fn($img) =>  $img->getImageUrl())
                 ->toArray(),
@@ -162,23 +162,23 @@ public function agregarAFavoritos(
 
     // ── POST ─────────────────────────────────────────────────
     $data    = json_decode($request->getContent(), true);
-    $usuario = isset($data['usuario_id'])
-        ? $em->getRepository(User::class)->find($data['usuario_id'])
+    $vehicle = isset($data['vehicle_id'])
+        ? $em->getRepository(User::class)->find($data['vehicle_id'])
         : null;
 
-    if (!$usuario) {
-        return new JsonResponse(['error' => 'Usuario no encontrado o ID faltante'], 400);
+    if (!$vehicle) {
+        return new JsonResponse(['error' => 'vehicle no encontrado o ID faltante'], 400);
     }
 
     // 1. Toggle en tabla Favorites
     $favorito = $em->getRepository(Favorites::class)->findOneBy([
-        'user_id'    => $usuario,
+        'user_id'    => $vehicle,
         'vehicle_id' => $vehicle
     ]);
 
     if (!$favorito) {
         $favorito = new Favorites();
-        $favorito->setUserId($usuario);
+        $favorito->setUserId($vehicle);
         $favorito->setVehicleId($vehicle);
         $favorito->setIsFavorite(true);
         $favorito->setCreatedAt(new \DateTime());
@@ -213,13 +213,13 @@ public function agregarAFavoritos(
         ], 500);
     }
 }
-    #[Route('/favoritos/usuario/{id}', name: 'get_favoritos_usuario', methods: ['GET'])]
-    public function getFavoritosUsuario(int $id, EntityManagerInterface $em): JsonResponse
+    #[Route('/favoritos/vehicle/{id}', name: 'get_favoritos_vehicle', methods: ['GET'])]
+    public function getFavoritosvehicle(int $id, EntityManagerInterface $em): JsonResponse
     {
         $user_id = $em->getRepository(User::class)->find($id);
 
         if (!$user_id) {
-            return new JsonResponse(['error' => 'Usuario no encontrado'], 404);
+            return new JsonResponse(['error' => 'vehicle no encontrado'], 404);
         }
         $favoritos = $em->getRepository(Favorites::class)->findBy([
             'user_id' => $user_id,
@@ -290,13 +290,13 @@ public function agregarAFavoritos(
 
         // Ordenar por precio
         $qb->orderBy('p.price', 'ASC');
-    $userId = $request->query->get('usuario_id');
+    $userId = $request->query->get('vehicle_id');
     $favoritosIds = [];
         if ($userId) {
-            $usuario = $em->getRepository(User::class)->find($userId);
-            if ($usuario) {
+            $vehicle = $em->getRepository(User::class)->find($userId);
+            if ($vehicle) {
                 $favoritos = $em->getRepository(Favorites::class)->findBy([
-                    'user_id'    => $usuario,
+                    'user_id'    => $vehicle,
                     'isFavorite' => true
                 ]);
                 $favoritosIds = array_map(
@@ -356,13 +356,13 @@ public function agregarAFavoritos(
 
         // Ordenar por precio
         $qb->orderBy('p.km', 'ASC');
-    $userId = $request->query->get('usuario_id');
+    $userId = $request->query->get('vehicle_id');
     $favoritosIds = [];
         if ($userId) {
-            $usuario = $em->getRepository(User::class)->find($userId);
-            if ($usuario) {
+            $vehicle = $em->getRepository(User::class)->find($userId);
+            if ($vehicle) {
                 $favoritos = $em->getRepository(Favorites::class)->findBy([
-                    'user_id'    => $usuario,
+                    'user_id'    => $vehicle,
                     'isFavorite' => true
                 ]);
                 $favoritosIds = array_map(
@@ -393,4 +393,98 @@ public function agregarAFavoritos(
             'vehicles' => $data
         ]);
     }
+
+     #[Route('/search', name: 'app_vehicles_search', methods: ['GET'])]
+public function search(Request $request, VehiclesRepository $VehiclesRepository, EntityManagerInterface $em): JsonResponse
+{
+    try {
+        $marca = $request->query->get('marca');
+        $modelo = $request->query->get('modelo');
+        $kmMin = $request->query->get('amp');
+        $kmMax = $request->query->get('kmMax');
+        $priceMin = $request->query->get('priceMin');
+        $priceMax = $request->query->get('priceMax');
+
+        $qb = $em->createQueryBuilder();
+        $qb->select('v')
+           ->from(Vehicles::class, 'v');
+
+        if ($marca) {
+            $qb->andWhere('v.marca = :marca')
+               ->setParameter('marca', $marca);
+        }
+
+        if ($modelo) {
+            $qb->andWhere('v.modelo = :modelo')
+               ->setParameter('modelo', $modelo);
+        }
+
+        if ($kmMin) {
+            $qb->andWhere('v.km >= :kmMin')
+               ->setParameter('kmMin', $kmMin);
+        }
+
+        if ($kmMax) {
+            $qb->andWhere('v.km <= :kmMax')
+               ->setParameter('kmMax', $kmMax);
+        }
+
+        if ($priceMin) {
+            $qb->andWhere('v.price >= :priceMin')
+               ->setParameter('priceMin', $priceMin);
+        }
+
+        if ($priceMax) {
+            $qb->andWhere('v.price <= :priceMax')
+               ->setParameter('priceMax', $priceMax);
+        }
+
+        $vehicles = $qb->getQuery()->getResult();
+
+        $data = [];
+        $userId = $request->query->get('user_id');
+        $favoritosIds = [];
+
+        if ($userId) {
+            $favoritos = $em->getRepository(Favorites::class)->findBy([
+                'user_id'    => $userId,
+                'isFavorite' => true
+            ]);
+
+            $favoritosIds = array_map(
+                fn($f) => $f->getVehicleId()->getId(),
+                $favoritos
+            );
+        }
+        if($vehicles == null){
+            return new JsonResponse([
+                'error' => 'No se encontraron vehiculos'
+            ], 404);
+        }
+        foreach ($vehicles as $vehicle) {
+            $data[] = [
+                'id' => $vehicle->getId(),
+                'marca' => $vehicle->getMarca(),
+                'modelo' => $vehicle->getModel(),
+                'price' => $vehicle->getPrice(),
+                'motor' => $vehicle->getMotor(),
+                'km' => $vehicle->getKm(),
+                'year' => $vehicle->getYear(),
+                'image_url' => $vehicle->getVehiclesImagesId()
+                    ->map(fn($image) => $image->getImageUrl())
+                    ->toArray(),
+                'is_favorite' => in_array($vehicle->getId(), $favoritosIds),
+            ];
+        }
+
+        return new JsonResponse($data, 200);
+
+    } catch (\Throwable $e) {
+        return new JsonResponse([
+            'error' => 'Error en búsqueda',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
 }

@@ -9,7 +9,7 @@ nelmio_cors:
         max_age: 3600
     paths:
         '^/api':
-            allow_origin: ['https://flexemcar.vercel.app', 'http://localhost:4200']
+            allow_origin: ['http://localhost:4200', 'https://flexemcar.vercel.app']
             allow_methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
             allow_headers: ['Content-Type', 'Authorization', 'X-Requested-With']
             allow_credentials: true

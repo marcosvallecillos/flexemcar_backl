@@ -52,11 +52,11 @@ final class VehiclesController extends AbstractController
     foreach ($vehicles as $vehicle) {
         $data[] = [
             'id'          => $vehicle->getId(),
-            'marca'       => $vehicle->getMarca(),
+            'marca'       => $vehicle->getBrand(),
             'modelo'      => $vehicle->getModel(),
             'year'        => $vehicle->getYear(),
-            'motor'       => $vehicle->getMotor(),
-            'km'          => $vehicle->getKm(),
+            'motor'       => $vehicle->getEngine(),
+            'km'          => $vehicle->getKilometers(),
             'precio'      => $vehicle->getPrice(),
             'description' => $vehicle->getDescription(),
             'is_favorite' => in_array($vehicle->getId(), $favoritosIds), // ← por vehicle
@@ -85,10 +85,10 @@ final class VehiclesController extends AbstractController
         }
     
         $vehicle = new Vehicles();
-        $vehicle->setMarca($data['marca'] ?? null);
-        $vehicle->setModel($data['modelo'] ?? null);
+        $vehicle->setBrand($data['marca'] ?? null);
+        $vehicle->setName($data['modelo'] ?? null);
         $vehicle->setYear($data['year'] ?? null);
-        $vehicle->setMotor($data['motor'] ?? null);
+        $vehicle->setEngine($data['motor'] ?? null);
         $vehicle->setPrice($data['precio'] ?? null);
          $vehicle->setDescription($data['descripcion'] ?? null);
         $vehicle->setIsFavorite($data['is_favorite'] ?? null);
@@ -101,7 +101,7 @@ final class VehiclesController extends AbstractController
             $entityManager->persist($image);
         }
     }
-        $vehicle->setKm($data['km'] ?? null);
+        $vehicle->setKilometers($data['km'] ?? null);
         $entityManager->persist($vehicle);
         $entityManager->flush();
       
@@ -126,12 +126,12 @@ final class VehiclesController extends AbstractController
 
         return new JsonResponse([
             'id' => $vehicle->getId(),
-            'marca' => $vehicle->getMarca(),
+            'marca' => $vehicle->getBrand(),
             'modelo' => $vehicle->getModel(),
             'año' => $vehicle->getYear(),
-            'motor' => $vehicle->getMotor(),
+            'motor' => $vehicle->getEngine(),
             'year' => $vehicle->getYear(),
-            'km' => $vehicle->getKm(),
+            'km' => $vehicle->getKilometers(),
             'descripcion '=> $vehicle -> getDescription(),
             'is_favorite'=> $vehicle -> isFavorite(),
             'image_url' => $vehicle->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,   
@@ -231,11 +231,11 @@ public function agregarAFavoritos(
             $vehicle = $favorito->getVehicleId();
             $data[] = [
                 'id' => $vehicle->getId(),
-                'marca' => $vehicle->getMarca(),
+                'marca' => $vehicle->getBrand(),
                 'modelo' => $vehicle->getModel(),
                 'precio' => $vehicle->getPrice(),
-                'motor' => $vehicle->getMotor(),
-                'km' => $vehicle->getKm(),
+                'motor' => $vehicle->getEngine(),
+                'km' => $vehicle->getKilometers(),
                 'year' => $vehicle->getYear(),
                 'image_url' => $vehicle->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,    
                 'favorite' => $favorito->isFavorite()
@@ -310,11 +310,11 @@ public function agregarAFavoritos(
         foreach ($vehicle as $vehicles) {
             $data[] = [
                 'id' => $vehicles->getId(),
-                'marca' => $vehicles->getMarca(),
+                'marca' => $vehicles->getBrand(),
                 'modelo' => $vehicles->getModel(),
                 'precio' => $vehicles->getPrice(),
-                'motor' => $vehicles->getMotor(),
-                'km' => $vehicles->getKm(),
+                'motor' => $vehicles->getEngine(),
+                'km' => $vehicles->getKilometers(),
                 'year' => $vehicles->getYear(),
                 'image_url' => $vehicles->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,    
                 'is_favorite' => in_array($vehicles->getId(), $favoritosIds), 
@@ -376,11 +376,11 @@ public function agregarAFavoritos(
         foreach ($vehicle as $vehicles) {
             $data[] = [
                 'id' => $vehicles->getId(),
-                'marca' => $vehicles->getMarca(),
+                'marca' => $vehicles->getBrand(),
                 'modelo' => $vehicles->getModel(),
                 'precio' => $vehicles->getPrice(),
-                'motor' => $vehicles->getMotor(),
-                'km' => $vehicles->getKm(),
+                'motor' => $vehicles->getEngine(),
+                'km' => $vehicles->getKilometers(),
                 'year' => $vehicles->getYear(),
                 'image_url' => $vehicles->getVehiclesImagesId()->map(fn($image) => $image->getImageUrl())->toArray() ?? null,    
                 'is_favorite' => in_array($vehicles->getId(), $favoritosIds), 
@@ -420,12 +420,12 @@ public function search(Request $request, VehiclesRepository $VehiclesRepository,
         }
 
         if ($kmMin) {
-            $qb->andWhere('v.km >= :kmMin')
+            $qb->andWhere('v.kilometers >= :kmMin')
                ->setParameter('kmMin', $kmMin);
         }
 
         if ($kmMax) {
-            $qb->andWhere('v.km <= :kmMax')
+            $qb->andWhere('v.kilometers <= :kmMax')
                ->setParameter('kmMax', $kmMax);
         }
 
@@ -464,11 +464,11 @@ public function search(Request $request, VehiclesRepository $VehiclesRepository,
         foreach ($vehicles as $vehicle) {
             $data[] = [
                 'id' => $vehicle->getId(),
-                'marca' => $vehicle->getMarca(),
+                'marca' => $vehicle->getBrand(),
                 'modelo' => $vehicle->getModel(),
                 'price' => $vehicle->getPrice(),
-                'motor' => $vehicle->getMotor(),
-                'km' => $vehicle->getKm(),
+                'motor' => $vehicle->getEngine(),
+                'km' => $vehicle->getKilometers(),
                 'year' => $vehicle->getYear(),
                 'image_url' => $vehicle->getVehiclesImagesId()
                     ->map(fn($image) => $image->getImageUrl())

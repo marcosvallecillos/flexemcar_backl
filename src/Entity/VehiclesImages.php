@@ -6,6 +6,7 @@ use App\Repository\VehiclesImagesRepository;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: VehiclesImagesRepository::class)]
+#[ORM\Table(name: 'vehicles_images')]
 class VehiclesImages
 {
     #[ORM\Id]

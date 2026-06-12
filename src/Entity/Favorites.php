@@ -3,6 +3,7 @@
 namespace App\Entity;
 
 use App\Repository\FavoritesRepository;
+use App\Entity\Vehicles;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: FavoritesRepository::class)]

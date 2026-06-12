@@ -53,7 +53,7 @@ class VehiclesImagesController extends AbstractController
 
     #[Route('/new/{vehicleId}', name: 'vehicles_images_upload', methods: ['POST'])]
     public function uploadImage(
-        int $vehicleId,
+        string $vehicleId,
         Request $request,
         VehiclesRepository $vehiclesRepository,
         EntityManagerInterface $em

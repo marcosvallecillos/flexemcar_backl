@@ -3,7 +3,7 @@
 namespace App\Controller;
 use App\Entity\User;
 use App\Entity\Reservas;
-use App\Entity\Rewiews;
+use App\Entity\Reviews;
 use App\Entity\Favorites;
 use App\Entity\Vehicles;
 use Symfony\Component\Mailer\MailerInterface;
@@ -22,7 +22,7 @@ use Symfony\Component\Routing\Attribute\Route;
 #[Route('/api/usuarios')]
 final class UserController extends AbstractController
 {
-     private LoggerInterface $logger;
+    private LoggerInterface $logger;
 
     public function __construct(LoggerInterface $logger)
     {
@@ -48,14 +48,14 @@ final class UserController extends AbstractController
                 'created_at' => $usuario->getCreatedAt()?->format('Y-m-d') ?? 'Sin fecha',
                 'last_login' => $usuario->getLastLogin()?->format('Y-m-d H:i:s') ?? null,
 
-                'reservas' => $usuario->getReservas()->map(function($reserva) {
+                'reservas' => $usuario->getReservas()->map(function ($reserva) {
                     $vehicle = $reserva->getVehicle();
                     $vehicleData = [];
                     if ($vehicle) {
                         $vehicleData[] = [
                             'id' => $vehicle->getId(),
                             'modelo' => $vehicle->getModel(),
-                            'marca' => $vehicle->getMarca()
+                            'marca' => $vehicle->getBrand()
                         ];
                     }
                     return [
@@ -68,26 +68,25 @@ final class UserController extends AbstractController
                 })->toArray()
             ];
         }
-        
+
         return new JsonResponse($data);
     }
 
-    #[Route('/new', name: 'app_usuarios_new', methods: ['GET','POST'])]
+    #[Route('/new', name: 'app_usuarios_new', methods: ['GET', 'POST'])]
     public function new(
         Request $request,
         EntityManagerInterface $entityManager,
         MailerInterface $mailer,
-        UserPasswordHasherInterface $passwordHasher,   
-        UserRepository $userRepository  
+        UserPasswordHasherInterface $passwordHasher,
+        UserRepository $userRepository
 
-    ): Response
-    {
+    ): Response {
         $data = json_decode($request->getContent(), true);
-    
+
         if ($data === null) {
             return new JsonResponse(['status' => 'JSON inválido'], 400);
         }
-    
+
         if (empty($data['password'])) {
             return new JsonResponse(['status' => 'El password es obligatorio'], 400);
         }
@@ -97,10 +96,10 @@ final class UserController extends AbstractController
             return new JsonResponse(['status' => 'El teléfono debe tener 9 dígitos'], 400);
         }
         $emailExistente = $userRepository->findOneBy(['email' => $data['email'] ?? null]);
-    if ($emailExistente) {
-        return new JsonResponse(['status' => 'Este correo ya está en uso'], 409);
-    }
-    
+        if ($emailExistente) {
+            return new JsonResponse(['status' => 'Este correo ya está en uso'], 409);
+        }
+
         $usuario = new User();
         $usuario->setName($data['nombre'] ?? null);
         $usuario->setLastName($data['apellidos'] ?? null);
@@ -248,15 +247,15 @@ final class UserController extends AbstractController
             'apellidos' => $usuario->getLastName(),
             'email' => $usuario->getEmail(),
             'telefono' => $usuario->getTelefono(),
-            'rol'=> $usuario->getRol(),
-            'reservas' => $usuario->getReservas()->map(function($reserva) {
+            'rol' => $usuario->getRol(),
+            'reservas' => $usuario->getReservas()->map(function ($reserva) {
                 $vehicle = $reserva->getVehicle();
                 $vehicleData = [];
                 if ($vehicle) {
                     $vehicleData[] = [
                         'id' => $vehicle->getId(),
                         'modelo' => $vehicle->getModel(),
-                        'marca' => $vehicle->getMarca()
+                        'marca' => $vehicle->getBrand()
                     ];
                 }
                 return [
@@ -268,26 +267,25 @@ final class UserController extends AbstractController
                 ];
             })->toArray()
         ];
-        
+
         return new JsonResponse($data);
     }
     #[Route('/{id}/last-login', name: 'app_usuarios_last_login', methods: ['POST'])]
-public function updateLastLogin(
-    User $usuario,
-    EntityManagerInterface $entityManager
-): JsonResponse {
-    $usuario->setLastLogin(new \DateTime());
-    $entityManager->flush();
+    public function updateLastLogin(
+        User $usuario,
+        EntityManagerInterface $entityManager
+    ): JsonResponse {
+        $usuario->setLastLogin(new \DateTime());
+        $entityManager->flush();
 
-    return new JsonResponse(['status' => 'ok']);
-}
-    #[Route('/login', name: 'app_usuarios_login', methods: ['GET','POST'])]
+        return new JsonResponse(['status' => 'ok']);
+    }
+    #[Route('/login', name: 'app_usuarios_login', methods: ['GET', 'POST'])]
     public function login(
         Request $request,
         EntityManagerInterface $entityManager,
         UserPasswordHasherInterface $passwordHasher
-    ): JsonResponse
-    {
+    ): JsonResponse {
         $data = json_decode($request->getContent(), true);
 
         // Verificamos que los datos necesarios estén presentes
@@ -319,7 +317,7 @@ public function updateLastLogin(
                 'message' => 'Credenciales inválidas'
             ], 401);
         }
-$user->setLastLogin(new \DateTime());
+        $user->setLastLogin(new \DateTime());
 
         $result = [
             'status' => 'ok',
@@ -336,45 +334,45 @@ $user->setLastLogin(new \DateTime());
         return new JsonResponse($result);
     }
 
-        #[Route('/{id}/edit', methods: ['GET', 'PUT'], name: 'app_usuarios_edit')]
-        public function edit(Request $request, User $usuario, EntityManagerInterface $entityManager,UserPasswordHasherInterface $passwordHasher): JsonResponse
-        {
-            // If it's a GET request, return the user data
-            if ($request->getMethod() === 'GET') {
-                $data = [
-                    'id' => $usuario->getId(),
-                    'nombre' => $usuario->getName(),
-                    'apellidos' => $usuario->getLastName(),
-                    'email' => $usuario->getEmail(),
-                    'telefono' => $usuario->getTelefono(),
-                    'password' => $usuario->getPassword(),
-                ];
-                
-                return new JsonResponse($data);
-            }
-            
-            // For PUT requests, update the user
-            $data = json_decode($request->getContent(), true); // Se recibe la información en JSON.
+    #[Route('/{id}/edit', methods: ['GET', 'PUT'], name: 'app_usuarios_edit')]
+    public function edit(Request $request, User $usuario, EntityManagerInterface $entityManager, UserPasswordHasherInterface $passwordHasher): JsonResponse
+    {
+        // If it's a GET request, return the user data
+        if ($request->getMethod() === 'GET') {
+            $data = [
+                'id' => $usuario->getId(),
+                'nombre' => $usuario->getName(),
+                'apellidos' => $usuario->getLastName(),
+                'email' => $usuario->getEmail(),
+                'telefono' => $usuario->getTelefono(),
+                'password' => $usuario->getPassword(),
+            ];
 
-            // Actualizamos los campos del usuario con los datos recibidos
-            $usuario->setName($data['nombre'] ?? $usuario->getName());
-            $usuario->setLastName($data['apellidos'] ?? $usuario->getLastName());
-            $usuario->setEmail($data['email'] ?? $usuario->getEmail());
-            $usuario->setTelefono($data['telefono'] ?? $usuario->getTelefono());
-            $hashedPassword = $passwordHasher->hashPassword(
+            return new JsonResponse($data);
+        }
+
+        // For PUT requests, update the user
+        $data = json_decode($request->getContent(), true); // Se recibe la información en JSON.
+
+        // Actualizamos los campos del usuario con los datos recibidos
+        $usuario->setName($data['nombre'] ?? $usuario->getName());
+        $usuario->setLastName($data['apellidos'] ?? $usuario->getLastName());
+        $usuario->setEmail($data['email'] ?? $usuario->getEmail());
+        $usuario->setTelefono($data['telefono'] ?? $usuario->getTelefono());
+        $hashedPassword = $passwordHasher->hashPassword(
             $usuario,
             $data['password']
         );
 
         $usuario->setPassword($hashedPassword) ?? $usuario->getPassword();
-            
 
-            $entityManager->flush();
 
-            return new JsonResponse(['status' => 'Usuario actualizado']);
-        }
+        $entityManager->flush();
 
-        #[Route('/delete/{id}', name: 'app_usuarios_delete', methods: ['DELETE'])]
+        return new JsonResponse(['status' => 'Usuario actualizado']);
+    }
+
+    #[Route('/delete/{id}', name: 'app_usuarios_delete', methods: ['DELETE'])]
     public function delete(int $id, UserRepository $UserRepository, EntityManagerInterface $entityManager): JsonResponse
     {
         try {
@@ -435,5 +433,5 @@ $user->setLastLogin(new \DateTime());
             return new JsonResponse(['error' => 'Error en búsqueda', 'message' => $e->getMessage()], 500);
         }
     }
-   
+
 }

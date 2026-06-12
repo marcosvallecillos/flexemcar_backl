@@ -6,9 +6,11 @@ use App\Repository\ReservasRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\Vehicles;
 use Doctrine\DBAL\Types\Types;
 
 #[ORM\Entity(repositoryClass: ReservasRepository::class)]
+#[ORM\Table(name: 'reservas')]
 class Reservas
 {
     #[ORM\Id]
